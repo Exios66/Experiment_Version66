@@ -11,88 +11,149 @@
     <link rel="icon" type="image/svg+xml" href="./eye-favicon.svg">
     
     <style>
-      #loading-screen {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
+      body {
         background-color: #333;
         color: white;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        z-index: 1000;
         font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 0;
       }
-      .loader {
-        border: 5px solid #f3f3f3;
-        border-top: 5px solid #3498db;
-        border-radius: 50%;
-        width: 50px;
-        height: 50px;
-        animation: spin 2s linear infinite;
-        margin-bottom: 20px;
+      #error-container {
+        display: none;
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background-color: rgba(244, 67, 54, 0.9);
+        padding: 20px;
+        border-radius: 5px;
+        max-width: 80%;
+        z-index: 1000;
       }
-      @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
+      #status-message {
+        position: fixed;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background-color: rgba(0,0,0,0.7);
+        color: white;
+        padding: 10px 20px;
+        border-radius: 5px;
+        font-size: 16px;
+        z-index: 999;
       }
-      .log-item {
-        margin: 5px 0;
-        font-size: 14px;
-      }
-      .success { color: #4CAF50; }
-      .error { color: #F44336; }
-      .warning { color: #FFC107; }
-      #loader-log {
-        width: 80%;
-        max-width: 600px;
+      #debug-panel {
+        position: fixed;
+        bottom: 10px;
+        right: 10px;
+        background-color: rgba(0,0,0,0.7);
+        color: white;
+        padding: 10px;
+        border-radius: 5px;
+        font-size: 12px;
+        max-width: 400px;
         max-height: 200px;
         overflow-y: auto;
-        margin-top: 20px;
-        padding: 10px;
-        background-color: rgba(0,0,0,0.3);
-        border-radius: 5px;
+        z-index: 999;
       }
     </style>
-  </head>
-  <body>
-    <div id="loading-screen">
-      <div class="loader"></div>
-      <h2>Loading Experiment Resources</h2>
-      <div id="load-status">Initializing...</div>
-      <div id="loader-log"></div>
-    </div>
     
-    <div id="root"></div>
-    
+    <!-- Debug and error handling -->
     <script>
-      // Logging function
-      function logMessage(message, type = 'info') {
-        console.log(`[${type.toUpperCase()}] ${message}`);
-        const logContainer = document.getElementById('loader-log');
-        const logItem = document.createElement('div');
-        logItem.className = `log-item ${type}`;
-        logItem.textContent = message;
-        logContainer.appendChild(logItem);
-        logContainer.scrollTop = logContainer.scrollHeight;
-      }
+      // Create a debug log
+      window.debugLog = [];
       
-      // Update loading status
-      function updateStatus(message) {
-        document.getElementById('load-status').textContent = message;
-      }
+      // Override console methods to capture errors
+      const originalConsoleError = console.error;
+      console.error = function() {
+        // Call the original console.error
+        originalConsoleError.apply(console, arguments);
+        
+        // Convert arguments to a message string
+        const message = Array.from(arguments).map(arg => {
+          if (typeof arg === 'object') {
+            try { return JSON.stringify(arg); }
+            catch(e) { return String(arg); }
+          }
+          return String(arg);
+        }).join(' ');
+        
+        // Add to debug log
+        addDebugMessage('ERROR: ' + message);
+        
+        // Show in error container
+        showError(message);
+      };
       
-      // Error handling for missing JavaScript files
-      window.addEventListener('error', function(e) {
-        if (e.message.includes('404') || e.message.includes('Failed to load resource')) {
-          logMessage(`Resource failed to load: ${e.target.src || e.target.href}`, 'error');
+      // Add debug message
+      function addDebugMessage(message) {
+        // Add timestamp
+        const time = new Date().toLocaleTimeString();
+        const entry = `[${time}] ${message}`;
+        
+        // Add to log array
+        window.debugLog.push(entry);
+        if (window.debugLog.length > 50) {
+          window.debugLog.shift(); // Keep only last 50 messages
         }
-      }, true);
+        
+        // Update debug panel if it exists
+        const debugPanel = document.getElementById('debug-panel');
+        if (debugPanel) {
+          debugPanel.innerHTML = window.debugLog.join('<br>');
+          debugPanel.scrollTop = debugPanel.scrollHeight;
+        }
+      }
       
-      // Initialize PsychoJS global configuration
+      // Error display
+      function showError(message) {
+        addDebugMessage('ERROR: ' + message);
+        const errorContainer = document.getElementById('error-container');
+        if (errorContainer) {
+          errorContainer.innerHTML = '<h3>Error</h3><p>' + message + '</p>';
+          errorContainer.style.display = 'block';
+        }
+      }
+      
+      // Status updates
+      function updateStatus(message) {
+        addDebugMessage('STATUS: ' + message);
+        const statusEl = document.getElementById('status-message');
+        if (statusEl) {
+          statusEl.textContent = message;
+        }
+      }
+      
+      // Global error handling
+      window.addEventListener('error', function(event) {
+        addDebugMessage(`ERROR: ${event.message} at ${event.filename}:${event.lineno}`);
+        showError(`${event.message} at ${event.filename}:${event.lineno}`);
+        return false;
+      });
+      
+      // Capture unhandled promise rejections
+      window.addEventListener('unhandledrejection', function(event) {
+        addDebugMessage('UNHANDLED PROMISE REJECTION: ' + event.reason);
+        showError('Unhandled Promise rejection: ' + event.reason);
+      });
+      
+      // Start debug logging
+      addDebugMessage('Page loaded and debug logging initialized');
+    </script>
+    
+    <!-- External libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jquery-ui-dist@1.12.1/jquery-ui.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/preloadjs@1.0.1/lib/preloadjs.min.js"></script>
+    
+    <!-- Make safe global functions available -->
+    <script>
+      // Expose helper functions to window
+      window.showError = showError;
+      window.updateStatus = updateStatus;
+      window.addDebugMessage = addDebugMessage;
+      
+      // Create minimal PsychoJS stub
       window.psychoJS = {
         debug: true,
         collectIP: false,
@@ -101,88 +162,117 @@
           pavlovia: 'https://pavlovia.org'
         },
         log: function() {
-          if (window.psychoJS.debug) {
+          if (this.debug) {
             console.log.apply(console, arguments);
+            // Add to debug log
+            addDebugMessage('PSYCHOJS: ' + Array.from(arguments).join(' '));
           }
         },
-        // Initialize core namespace
-        core: {},
-        data: {},
+        core: { 
+          Clock: function() {
+            this.getTime = function() { return Date.now() / 1000; };
+            return this;
+          },
+          PsychoJS: function(params) {
+            addDebugMessage('PsychoJS constructor called');
+            this.debug = params.debug || false;
+            this.start = function(params) {
+              addDebugMessage('PsychoJS.start called with: ' + JSON.stringify(params));
+              updateStatus('Running experiment');
+              return true;
+            };
+            return this;
+          },
+          Window: function() { return this; }
+        },
+        data: {
+          ExperimentHandler: function() { return this; },
+          TrialHandler: function() { return this; }
+        },
         util: {},
-        visual: {}
+        visual: {
+          TextStim: function() { return this; },
+          ImageStim: function() { return this; }
+        }
       };
       
-      // Sequential resource loader
-      async function loadResources() {
-        try {
-          // Step 1: Load external libraries
-          updateStatus('Loading external libraries...');
-          
-          await loadScript('https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js');
-          logMessage('jQuery loaded successfully');
-          
-          await loadScript('https://cdn.jsdelivr.net/npm/jquery-ui-dist@1.12.1/jquery-ui.min.js');
-          logMessage('jQuery UI loaded successfully');
-          
-          await loadScript('https://cdn.jsdelivr.net/npm/preloadjs@1.0.1/lib/preloadjs.min.js');
-          logMessage('PreloadJS loaded successfully');
-          
-          // Step 2: Load WebGazer
-          updateStatus('Loading WebGazer eye tracking library...');
-          try {
-            await loadScript('./webgazer-2.0.1.js');
-            logMessage('WebGazer loaded from primary file');
-          } catch (err) {
-            logMessage('Failed to load primary WebGazer, trying alternate...', 'warning');
-            await loadScript('./webgazer-2.0.1.tp.js');
-            logMessage('WebGazer loaded from alternate file');
-          }
-          
-          // Step 3: Load PsychoJS
-          updateStatus('Loading PsychoJS library...');
-          await loadScript('./lib/psychojs-2021.2.3.js');
-          logMessage('PsychoJS library loaded successfully');
-          
-          // Wait a moment to ensure everything is initialized
-          await new Promise(resolve => setTimeout(resolve, 500));
-          
-          // Step 4: Load experiment as ES module
-          updateStatus('Starting experiment...');
-          logMessage('Loading experiment script');
-          
-          // Create a new script element for the experiment
-          const experimentScript = document.createElement('script');
-          experimentScript.src = './extended_session_experiment-no-modules.js';
-          experimentScript.onload = () => {
-            logMessage('Experiment loaded successfully');
-            document.getElementById('loading-screen').style.display = 'none';
-          };
-          experimentScript.onerror = (error) => {
-            logMessage(`Failed to load experiment: ${error}`, 'error');
-            updateStatus('Error loading experiment');
-          };
-          document.body.appendChild(experimentScript);
-          
-        } catch (error) {
-          updateStatus('Error loading resources');
-          logMessage(`Loading failed: ${error.message}`, 'error');
-          console.error('Resource loading failed:', error);
-        }
+      addDebugMessage('PsychoJS stub initialized');
+    </script>
+    
+    <!-- Load real PsychoJS -->
+    <script>
+      function loadPsychoJS() {
+        addDebugMessage('Loading PsychoJS library');
+        var script = document.createElement('script');
+        script.src = './lib/psychojs-2021.2.3.js';
+        script.onload = function() {
+          addDebugMessage('PsychoJS library loaded successfully');
+        };
+        script.onerror = function() {
+          addDebugMessage('Failed to load PsychoJS library');
+          showError('Failed to load PsychoJS library');
+        };
+        document.head.appendChild(script);
       }
       
-      // Helper to load scripts with promises
-      function loadScript(src) {
-        return new Promise((resolve, reject) => {
-          const script = document.createElement('script');
-          script.src = src;
-          script.onload = () => resolve();
-          script.onerror = () => reject(new Error(`Failed to load ${src}`));
-          document.head.appendChild(script);
-        });
+      // Load PsychoJS
+      loadPsychoJS();
+    </script>
+    
+    <!-- Load WebGazer -->
+    <script>
+      function loadWebGazer() {
+        addDebugMessage('Loading WebGazer');
+        var script = document.createElement('script');
+        script.src = './webgazer-2.0.1.js';
+        script.onload = function() {
+          addDebugMessage('WebGazer loaded successfully');
+        };
+        script.onerror = function() {
+          addDebugMessage('Trying alternate WebGazer source');
+          var altScript = document.createElement('script');
+          altScript.src = './webgazer-2.0.1.tp.js';
+          altScript.onload = function() {
+            addDebugMessage('Alternate WebGazer loaded successfully');
+          };
+          altScript.onerror = function() {
+            addDebugMessage('WebGazer not available - eye tracking will not be used');
+          };
+          document.head.appendChild(altScript);
+        };
+        document.head.appendChild(script);
       }
       
-      // Start loading when DOM is ready
-      document.addEventListener('DOMContentLoaded', loadResources);
+      // Load WebGazer
+      loadWebGazer();
+    </script>
+    
+    <!-- Load experiment script -->
+    <script>
+      document.addEventListener('DOMContentLoaded', function() {
+        addDebugMessage('DOM loaded, preparing to load experiment script');
+        
+        // Give libraries time to initialize
+        setTimeout(function() {
+          addDebugMessage('Loading experiment script');
+          var script = document.createElement('script');
+          script.src = './extended_session_experiment-no-modules.js';
+          script.onload = function() {
+            addDebugMessage('Experiment script loaded successfully');
+            
+            // Hide status after successful load
+            setTimeout(function() {
+              var statusEl = document.getElementById('status-message');
+              if (statusEl) statusEl.style.display = 'none';
+            }, 2000);
+          };
+          script.onerror = function() {
+            addDebugMessage('Failed to load experiment script');
+            showError('Failed to load experiment script');
+          };
+          document.body.appendChild(script);
+        }, 1000);
+      });
     </script>
   </body>
 </html> 
