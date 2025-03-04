@@ -1,4 +1,16 @@
 /**
+ * DEPRECATED - THIS FILE HAS BEEN MERGED INTO THE ROOT FILE
+ * 
+ * The functionality in this file has been incorporated into the main 
+ * extended_session_experiment.js file in the root directory.
+ * 
+ * Please use the version at: ./extended_session_experiment.js
+ * 
+ * This version in the subdirectory will no longer be maintained or used.
+ * It is kept only for reference purposes and backward compatibility.
+ */
+
+/**
  * This file contains extracted functions from the main experiment.
  * It's meant to be included alongside the main experiment.js file
  * for compatibility with certain experiment configurations.

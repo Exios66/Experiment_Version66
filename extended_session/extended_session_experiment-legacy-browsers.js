@@ -1,4 +1,13 @@
 /**
+ * DEPRECATED - THIS FILE HAS BEEN MOVED TO THE ROOT DIRECTORY
+ * 
+ * Please use the version at: ./extended_session_experiment-legacy-browsers.js
+ * 
+ * This version in the subdirectory will no longer be maintained or used.
+ * It is kept only for reference purposes and backward compatibility.
+ */
+
+/**
  * This is the legacy-browser compatible version of the extended session experiment
  * It requires the PsychoJS IIFE build (non-module format) to run on older browsers.
  * 
