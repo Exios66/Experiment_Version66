@@ -71,6 +71,13 @@ try {
     topLevelStatus: true
   });
 
+  // Save references to utility objects in the global scope for experiment functions
+  window._expUtil = util;
+  window._expVisual = visual;
+  window._expCore = core;
+  window._expData = data;
+  window._expSound = sound;
+
   // Open window
   psychoJS.openWindow({
     fullscr: true,
@@ -153,6 +160,15 @@ function calculateVariance(array) {
 
 // Setup experiment components
 function setupExperiment(psychoJS, expInfo) {
+  // Ensure we have access to the util and visual objects
+  const util = window._expUtil;
+  const visual = window._expVisual;
+  
+  if (!util || !visual) {
+    console.error('PsychoJS utility objects not available');
+    throw new Error('Missing required PsychoJS components');
+  }
+  
   // Initialize components for Routine "instructions"
   const instructionsClock = new util.Clock();
   const instructionsText = new visual.TextStim({
@@ -237,7 +253,11 @@ function setupExperiment(psychoJS, expInfo) {
 
 // Instructions Routine
 function instructionsRoutineBegin() {
-  return async function() {
+  // Get required objects
+  const util = window._expUtil;
+  const visual = window._expVisual;
+  
+  return function() {
     //------Prepare to start Routine 'instructions'-------
     instructionsText.setAutoDraw(true);
     instructionsResp.keys = undefined;
@@ -281,7 +301,11 @@ function instructionsRoutineEnd() {
 
 // Calibration Routine
 function calibrationRoutineBegin() {
-  return async function() {
+  // Get required objects
+  const util = window._expUtil;
+  const visual = window._expVisual;
+  
+  return function() {
     //------Prepare to start Routine 'calibration'-------
     calibrationText.setAutoDraw(true);
     calibrationDot.setAutoDraw(true);
@@ -396,7 +420,11 @@ function trackingLoopEnd() {
 
 // Tracking Trial Routine
 function trackingTrialRoutineBegin() {
-  return async function() {
+  // Get required objects
+  const util = window._expUtil;
+  const visual = window._expVisual;
+  
+  return function() {
     //------Prepare to start Routine 'trackingTrial'-------
     trackingTrialClock.reset();
     trackingTarget.setAutoDraw(true);
@@ -518,7 +546,11 @@ function trackingTrialRoutineEnd() {
 
 // End Routine
 function endRoutineBegin() {
-  return async function() {
+  // Get required objects
+  const util = window._expUtil;
+  const visual = window._expVisual;
+  
+  return function() {
     //------Prepare to start Routine 'end'-------
     endText.setAutoDraw(true);
     endResp.keys = undefined;

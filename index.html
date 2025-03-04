@@ -9,10 +9,55 @@
     <link rel="stylesheet" href="./lib/psychojs-2021.2.3.css">
     <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="./eye-favicon.svg">
-    <link rel="icon" type="image/x-icon" href="data:image/x-icon;base64,AAABAAEAEBAAAAEAIABoBAAAFgAAACgAAAAQAAAAIAAAAAEAIAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGBgYAhgYGAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYGBgCP///xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABgYGAI////EAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYGBGCP///xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABgYGAI////EAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGBgYAj///8QAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYGBgCP///xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABgYGAI////EAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGBgYAj///8QAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYGBgCP///xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABgYGAI////EAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==">
+    <link rel="icon" type="image/x-icon" href="data:image/x-icon;base64,AAABAAEAEBAAAAEAIABoBAAAFgAAACgAAAAQAAAAIAAAAAEAIAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGBgYAhgYGAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYGBgCP///xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABgYGAI////EAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYGBGCP///xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABgYGAI////EAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGBgYAj///8QAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYGBgCP///xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABgYGAI////EAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGBgYAj///8QAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYGBgCP///xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABgYGAI////EAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==">
+    
+    <!-- Page initialization and error handling -->
     <script>
-      // Error handling for missing JavaScript files
+      // Debug logging
+      const debugLog = [];
+      function addDebugMessage(message) {
+        const timestamp = new Date().toLocaleTimeString();
+        const entry = `[${timestamp}] ${message}`;
+        debugLog.push(entry);
+        console.log(entry);
+        
+        // Update debug panel if it exists
+        const debugPanel = document.getElementById('debug-panel');
+        if (debugPanel) {
+          debugPanel.textContent = debugLog.join('\n');
+          debugPanel.scrollTop = debugPanel.scrollHeight;
+        }
+      }
+
+      // Error display
+      function showError(message, details) {
+        console.error(message, details);
+        
+        // Add to debug log
+        addDebugMessage(`ERROR: ${message}`);
+        
+        // Create error panel if it doesn't exist
+        let errorPanel = document.getElementById('error-panel');
+        if (!errorPanel) {
+          errorPanel = document.createElement('div');
+          errorPanel.id = 'error-panel';
+          errorPanel.style = 'position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(255,0,0,0.9); color: white; padding: 15px; border-radius: 5px; font-family: sans-serif; z-index: 9999; max-width: 80%; box-shadow: 0 4px 8px rgba(0,0,0,0.2);';
+          document.body.appendChild(errorPanel);
+        }
+        
+        errorPanel.innerHTML = `
+          <h3 style="margin-top: 0;">Error</h3>
+          <p>${message}</p>
+          ${details ? `<pre style="background: rgba(0,0,0,0.3); padding: 8px; overflow: auto; max-height: 200px; font-size: 12px;">${details}</pre>` : ''}
+          <button onclick="this.parentNode.style.display='none';" style="background: white; color: red; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; margin-top: 10px;">Dismiss</button>
+        `;
+      }
+      
+      // Global error handler
       window.addEventListener('error', function(e) {
+        showError(`JavaScript Error: ${e.message}`, e.error ? e.error.stack : null);
+        
+        // Special handling for resource loading errors
         if (e.message.includes('404') || e.message.includes('Failed to load resource')) {
           console.error('Resource failed to load:', e.target.src || e.target.href);
           document.getElementById('root').innerHTML = '<div style="color: red; margin: 20px; font-family: sans-serif;">' +
@@ -22,17 +67,24 @@
             '</div>';
         }
       }, true);
+      
+      // Handle unhandled promise rejections
+      window.addEventListener('unhandledrejection', function(e) {
+        showError(`Unhandled Promise rejection: ${e.reason}`, e.reason.stack);
+        addDebugMessage('UNHANDLED PROMISE REJECTION: ' + e.reason);
+      });
+      
+      // Initialize page
+      addDebugMessage('Page loaded and debug logging initialized');
     </script>
-  </head>
-  <body>
-    <div id="root"></div>
-    <!-- external libraries -->
+    
+    <!-- External libraries - load first to ensure availability -->
     <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jquery-ui-dist@1.12.1/jquery-ui.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/preloadjs@1.0.1/lib/preloadjs.min.js"></script>
     
-    <!-- PsychoJS configuration -->
-    <script type="text/javascript">
+    <!-- PsychoJS configuration - init early to ensure it's available -->
+    <script>
       window.psychoJS = {
         debug: true,
         collectIP: false,
@@ -45,7 +97,10 @@
             console.log.apply(console, arguments);
           }
         },
+        version: '2021.2.3'
       };
+      
+      addDebugMessage('PsychoJS stub initialized');
       
       // AudioContext handling for warnings
       window.fixAudioContext = function() {
@@ -183,6 +238,24 @@
     </script>
     
     <!-- Module wrapper for experiment -->
+    <script type="module">
+      // Directly import PsychoJS as an ES module
+      import { core, data, sound, util, visual } from './lib/psychojs-2021.2.3.js';
+      
+      // Store in a global location for non-module scripts
+      window.psychoJSModule = { core, data, sound, util, visual };
+      
+      // Log success
+      addDebugMessage('PsychoJS library imported successfully as ES module');
+      
+      // Provide access to util for other scripts
+      window._expUtil = util;
+      window._expVisual = visual;
+      window._expCore = core;
+      window._expData = data;
+      window._expSound = sound;
+    </script>
+    
     <script type="module" src="./extended_session_experiment-module-wrapper.js"></script>
     
     <!-- Fallback for browsers that don't support modules -->
@@ -205,5 +278,57 @@
     
     <!-- Legacy browsers support -->
     <script nomodule src="./extended_session_experiment-legacy-browsers.js"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+    
+    <!-- Debug and status panels (initially hidden) -->
+    <div id="experiment-status" style="position: fixed; bottom: 10px; left: 10px; background-color: rgba(0,0,0,0.7); color: white; padding: 10px; border-radius: 5px; font-family: monospace; font-size: 12px; z-index: 1000; display: none;">
+      <div>Status: <span id="status-text">Initializing...</span></div>
+      <div>PsychoJS: <span id="psychojs-status">Loading...</span></div>
+      <div>WebGazer: <span id="webgazer-status">Not initialized</span></div>
+      <button onclick="toggleDebugPanel()" style="background: #444; color: white; border: none; padding: 2px 5px; margin-top: 5px; cursor: pointer; font-size: 10px; border-radius: 3px;">Show Debug Log</button>
+    </div>
+    
+    <div id="debug-panel" style="position: fixed; bottom: 70px; left: 10px; background-color: rgba(0,0,0,0.9); color: white; padding: 10px; border-radius: 5px; font-family: monospace; font-size: 10px; max-width: 800px; max-height: 300px; overflow-y: auto; white-space: pre; z-index: 1000; display: none;"></div>
+    
+    <script>
+      // Toggle debug panel visibility
+      function toggleDebugPanel() {
+        const panel = document.getElementById('debug-panel');
+        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        
+        // Update button text
+        const button = document.querySelector('#experiment-status button');
+        button.textContent = panel.style.display === 'none' ? 'Show Debug Log' : 'Hide Debug Log';
+      }
+      
+      // Show experiment status
+      document.addEventListener('DOMContentLoaded', function() {
+        // Show status panel after a short delay
+        setTimeout(function() {
+          const statusPanel = document.getElementById('experiment-status');
+          if (statusPanel) statusPanel.style.display = 'block';
+          
+          // Update status based on loaded components
+          const psychojsStatus = document.getElementById('psychojs-status');
+          if (psychojsStatus) {
+            psychojsStatus.textContent = window.psychoJS ? 'Loaded' : 'Not loaded';
+            psychojsStatus.style.color = window.psychoJS ? '#4CAF50' : '#F44336';
+          }
+          
+          const webgazerStatus = document.getElementById('webgazer-status');
+          if (webgazerStatus) {
+            webgazerStatus.textContent = window.webgazer ? 'Loaded' : 'Not loaded';
+            webgazerStatus.style.color = window.webgazer ? '#4CAF50' : '#F44336';
+          }
+          
+          const statusText = document.getElementById('status-text');
+          if (statusText) {
+            statusText.textContent = 'Ready';
+          }
+        }, 2000);
+      });
+    </script>
   </body>
 </html>
