@@ -78620,7 +78620,7 @@ class normalization_LayerNormalization extends topology_Layer {
             }
             const broadcast = (v) => {
                 if (v != null && v.shape.length !== nDims &&
-                    this.axis !== [nDims - 1]) {
+                    !arrayEquals(this.axis, [nDims - 1])) {
                     return v.reshape(broadcastShape);
                 }
                 else {
