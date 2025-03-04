@@ -175,9 +175,9 @@
             // Store originals for reference
             window.createjsProxyHandler.LoadQueue = createjsObj.LoadQueue;
             
-            // Patch the appendToHead method in the LoadQueue's prototype chain
-            const originalAppendToHead = createjsObj.LoadQueue.prototype._loadJavascript;
-            window.createjsProxyHandler.loadJavascript = originalAppendToHead;
+            // Patch the _loadJavascript method in the LoadQueue's prototype chain
+            const originalLoadJavascript = createjsObj.LoadQueue.prototype._loadJavascript;
+            window.createjsProxyHandler.loadJavascript = originalLoadJavascript;
             
             createjsObj.LoadQueue.prototype._loadJavascript = function(item) {
               // Check if the item is a module
@@ -215,7 +215,7 @@
               }
               
               // For non-module scripts, use the original method
-              return originalAppendToHead.call(this, item);
+              return originalLoadJavascript.call(this, item);
             };
             
             // Find the internal appendToHead function in the PreloadJS machinery
@@ -225,8 +225,9 @@
                 if (typeof createjsObj[prop].appendToHead === 'function') {
                   addDebugMessage(`Found appendToHead in createjs.${prop}`);
                   
-                  // Store the original for reference
-                  window.createjsProxyHandler.appendToHead = createjsObj[prop].appendToHead;
+                  // Store the original function - IMPORTANT: save a reference to the actual implementation
+                  const originalAppendToHead = createjsObj[prop].appendToHead;
+                  window.createjsProxyHandler.appendToHead = originalAppendToHead;
                   
                   // Replace with our version
                   createjsObj[prop].appendToHead = function(parent, elem, before) {
@@ -254,8 +255,9 @@
                       }
                     }
                     
-                    // Call the original function with our potentially modified element
-                    return window.createjsProxyHandler.appendToHead.call(this, parent, elem, before);
+                    // Call the ORIGINAL function with our potentially modified element
+                    // NOT the patched version - this is what was causing the infinite recursion
+                    return originalAppendToHead.call(this, parent, elem, before);
                   };
                   
                   break;
@@ -411,10 +413,20 @@
       // Store in a global location for non-module scripts
       window.psychoJSModule = { core, data, sound, util, visual };
       
+      // Also expose modules globally to avoid "core is not defined" errors
+      window.core = core;
+      window.data = data;
+      window.sound = sound;
+      window.util = util;
+      window.visual = visual;
+      
+      // Explicitly set PsychoJS class globally
+      window.PsychoJS = core.PsychoJS;
+      
       // Log success
       addDebugMessage('PsychoJS library imported successfully as ES module');
+      addDebugMessage('PsychoJS modules exposed globally');
       
-      // Try to import the experiment as a module
       try {
         // Register the module import handler
         window.onExperimentModuleLoaded = function(module) {
@@ -426,6 +438,22 @@
         moduleScript.type = 'module';
         moduleScript.src = './extended_session_experiment-module-wrapper.js';
         document.head.appendChild(moduleScript);
+        
+        // Add a safety check in case the module wrapper fails
+        setTimeout(() => {
+          if (!window.experimentModuleLoaded && !window.core) {
+            console.warn('Safety check failed - core module not globally available');
+            addDebugMessage('WARNING: Safety check failed - redefining core modules');
+            
+            // Re-expose the modules
+            window.core = core;
+            window.data = data;
+            window.sound = sound;
+            window.util = util;
+            window.visual = visual;
+            window.PsychoJS = core.PsychoJS;
+          }
+        }, 2000);
       } catch (e) {
         console.error('Error loading experiment module:', e);
         addDebugMessage('ERROR: Failed to load experiment module: ' + e.message);

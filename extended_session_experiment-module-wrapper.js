@@ -8,64 +8,88 @@ window.experimentModuleLoaded = false;
 window.experimentLoadAttempts = 0;
 window.maxLoadAttempts = 3;
 
-// Create a function to dynamically import the module
-window.loadExperimentModule = function() {
-  console.log('Loading experiment as ES6 module...');
-  window.experimentLoadAttempts++;
-  
-  // Add message to debug log if available
-  if (typeof addDebugMessage === 'function') {
-    addDebugMessage(`Attempt ${window.experimentLoadAttempts} to load experiment module`);
-  }
-  
-  // Import the module dynamically
-  import('./extended_session_experiment.js')
-    .then(module => {
-      console.log('Module loaded successfully!');
-      window.experimentModuleLoaded = true;
-      
-      // Store a reference to the module
-      window.experimentModule = module;
-      
-      // Add message to debug log if available
-      if (typeof addDebugMessage === 'function') {
-        addDebugMessage('Experiment module loaded successfully');
-      }
-      
-      // Notify any listeners that might be waiting for the module
-      if (typeof window.onExperimentModuleLoaded === 'function') {
-        window.onExperimentModuleLoaded(module);
-      }
-      
-      // Dispatch a custom event
-      const event = new CustomEvent('experimentModuleLoaded', { detail: module });
-      window.dispatchEvent(event);
-      
-      // Register this file as a module for PreloadJS detection
-      if (window.moduleScripts && !window.moduleScripts.includes('extended_session_experiment.js')) {
-        window.moduleScripts.push('extended_session_experiment.js');
-      }
-    })
-    .catch(error => {
-      console.error('Failed to load experiment module:', error);
-      
-      // Add message to debug log if available
-      if (typeof addDebugMessage === 'function') {
-        addDebugMessage(`ERROR: Failed to load experiment module: ${error.message}`);
-      }
-      
-      if (window.experimentLoadAttempts < window.maxLoadAttempts) {
-        // Try again with a delay
-        console.log(`Retry attempt ${window.experimentLoadAttempts}/${window.maxLoadAttempts}...`);
-        setTimeout(window.loadExperimentModule, 500);
-        return;
-      }
-      
-      // After max attempts, try the non-module version as fallback
-      console.log('Trying non-module version as fallback...');
-      loadNonModuleVersion();
-    });
-};
+// Import and expose PsychoJS modules globally
+import { core, data, sound, util, visual } from './lib/psychojs-2021.2.3.js';
+
+// Make sure global variables are defined before loading experiment
+window.core = core;
+window.data = data;
+window.sound = sound;
+window.util = util;
+window.visual = visual;
+
+// Also define the PsychoJS class globally since it's commonly used
+window.PsychoJS = core.PsychoJS;
+
+// Log the modules were exposed
+if (typeof addDebugMessage === 'function') {
+  addDebugMessage('PsychoJS modules exposed globally in module wrapper');
+}
+
+// Delay the module loading to ensure globals are set
+setTimeout(() => {
+  // Create a function to dynamically import the module
+  window.loadExperimentModule = function() {
+    console.log('Loading experiment as ES6 module...');
+    window.experimentLoadAttempts++;
+    
+    // Add message to debug log if available
+    if (typeof addDebugMessage === 'function') {
+      addDebugMessage(`Attempt ${window.experimentLoadAttempts} to load experiment module`);
+    }
+    
+    // Import the module dynamically
+    import('./extended_session_experiment.js')
+      .then(module => {
+        console.log('Module loaded successfully!');
+        window.experimentModuleLoaded = true;
+        
+        // Store a reference to the module
+        window.experimentModule = module;
+        
+        // Add message to debug log if available
+        if (typeof addDebugMessage === 'function') {
+          addDebugMessage('Experiment module loaded successfully');
+        }
+        
+        // Notify any listeners that might be waiting for the module
+        if (typeof window.onExperimentModuleLoaded === 'function') {
+          window.onExperimentModuleLoaded(module);
+        }
+        
+        // Dispatch a custom event
+        const event = new CustomEvent('experimentModuleLoaded', { detail: module });
+        window.dispatchEvent(event);
+        
+        // Register this file as a module for PreloadJS detection
+        if (window.moduleScripts && !window.moduleScripts.includes('extended_session_experiment.js')) {
+          window.moduleScripts.push('extended_session_experiment.js');
+        }
+      })
+      .catch(error => {
+        console.error('Failed to load experiment module:', error);
+        
+        // Add message to debug log if available
+        if (typeof addDebugMessage === 'function') {
+          addDebugMessage(`ERROR: Failed to load experiment module: ${error.message}`);
+        }
+        
+        if (window.experimentLoadAttempts < window.maxLoadAttempts) {
+          // Try again with a delay
+          console.log(`Retry attempt ${window.experimentLoadAttempts}/${window.maxLoadAttempts}...`);
+          setTimeout(window.loadExperimentModule, 500);
+          return;
+        }
+        
+        // After max attempts, try the non-module version as fallback
+        console.log('Trying non-module version as fallback...');
+        loadNonModuleVersion();
+      });
+  };
+
+  // Load the module after ensuring globals are set
+  window.loadExperimentModule();
+}, 100);
 
 // Function to load the non-module version as fallback
 function loadNonModuleVersion() {
@@ -184,7 +208,4 @@ setTimeout(function() {
 }, 5000);
 
 // Try to patch CreateJS again after a delay (in case it loads after this script)
-setTimeout(patchCreateJS, 1000);
-
-// Load the module when this script executes
-window.loadExperimentModule(); 
+setTimeout(patchCreateJS, 1000); 

@@ -11,7 +11,7 @@ const mimeTypes = {
     '.html': 'text/html',
     '.htm': 'text/html',
     '.js': 'text/javascript',
-    '.mjs': 'text/javascript', // JavaScript modules
+    '.mjs': 'application/javascript', // JavaScript modules with explicit extension
     '.css': 'text/css',
     '.json': 'application/json',
     '.png': 'image/png',
@@ -43,6 +43,15 @@ const moduleFiles = [
     'extended_session_experiment.js',
     'module-wrapper.js',
     'extended_session_experiment-module-wrapper.js'
+];
+
+// Common source map files that might be requested but are usually not available
+const commonMissingMaps = [
+    'webgazer.js.map',
+    'psychojs-2021.2.3.js.map',
+    'preloadjs.min.js.map',
+    'jquery.min.js.map',
+    'jquery-ui.min.js.map'
 ];
 
 // Function to check if a file is likely a module (has ES6 imports/exports)
@@ -94,9 +103,27 @@ const server = http.createServer((req, res) => {
     
     // Handle missing source map files gracefully
     if (pathname.endsWith('.map')) {
-        // Check if the map file exists
-        if (!fs.existsSync(pathname)) {
-            console.log(`Source map requested but not found: ${pathname} - Returning empty map`);
+        // Check if this is a common missing map file that we know doesn't exist
+        const filename = path.basename(pathname);
+        const isCommonMissingMap = commonMissingMaps.some(mapFile => 
+            filename.includes(mapFile) || pathname.includes(mapFile)
+        );
+        
+        // If it's a common missing map or doesn't exist, serve an empty map
+        if (isCommonMissingMap || !fs.existsSync(pathname)) {
+            // For common missing maps, don't log an error to reduce noise
+            if (isCommonMissingMap) {
+                console.log(`Expected missing map file: ${pathname} - Serving empty map`);
+            } else {
+                console.log(`Source map not found: ${pathname} - Serving empty map`);
+            }
+            
+            // Add CORS headers for all responses
+            res.setHeader('Access-Control-Allow-Origin', '*');
+            res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+            res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+            
+            // Return empty object
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end('{}');
             return;
@@ -106,25 +133,23 @@ const server = http.createServer((req, res) => {
     // Get the file extension
     const ext = path.parse(pathname).ext;
     
+    // Determine if this is a module file - check both listed files and content
+    const isModule = ext === '.js' && checkIfModuleFile(pathname);
+    
     // Set the correct MIME type
     let contentType = mimeTypes[ext] || 'application/octet-stream';
     
-    // Handle JavaScript modules specially
+    // Override MIME type for JavaScript modules
+    if (isModule) {
+        contentType = 'application/javascript';
+        
+        // Add special headers for modules
+        res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
+        res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
+    }
+    
+    // Log the file type detection for JavaScript files
     if (ext === '.js') {
-        // Check if this is a module file
-        const isModule = checkIfModuleFile(pathname) ||
-                        pathname.includes('module-wrapper') || 
-                        (req.headers.accept && req.headers.accept.includes('application/javascript'));
-        
-        if (isModule) {
-            contentType = 'application/javascript';
-            
-            // Add special header for modules
-            res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
-            res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
-        }
-        
-        // Log the file type detection
         console.log(`Serving JS file: ${pathname} as ${isModule ? 'module' : 'regular script'}`);
     }
     
@@ -157,6 +182,20 @@ const server = http.createServer((req, res) => {
         if (err) {
             // If the file is not found
             if (err.code === 'ENOENT') {
+                // Check if this is a map file we missed in the earlier check
+                if (pathname.endsWith('.map')) {
+                    console.log(`Map file not found in second check: ${pathname} - Returning empty map`);
+                    
+                    // Add CORS headers
+                    res.setHeader('Access-Control-Allow-Origin', '*');
+                    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+                    res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+                    
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end('{}');
+                    return;
+                }
+                
                 console.error(`File not found: ${pathname}`);
                 
                 // Special handling for missing files
@@ -191,6 +230,11 @@ const server = http.createServer((req, res) => {
             res.end(`Server error: ${err.code}`);
             return;
         }
+        
+        // Add CORS headers for all responses
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
         
         // If the file is found, send it with the correct content type
         res.writeHead(200, { 'Content-Type': contentType });
