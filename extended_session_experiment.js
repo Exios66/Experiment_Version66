@@ -145,6 +145,77 @@ async function experimentInit() {
   window.calibrationPoints = [];
   window.trackingAccuracy = { x: 0, y: 0 };
   
+  // Initialize coordinate plane for user's screen
+  window.screenCoordinatePlane = {
+    initialized: false,
+    topLeft: { x: 0, y: 0 },
+    topRight: { x: 0, y: 0 },
+    bottomLeft: { x: 0, y: 0 },
+    bottomRight: { x: 0, y: 0 },
+    centerPoint: { x: 0, y: 0 },
+    width: 0,
+    height: 0
+  };
+  
+  // Function to construct coordinate plane from calibration points
+  window.constructCoordinatePlane = function() {
+    if (window.calibrationPoints.length < 5) {
+      console.warn('Not enough calibration points to construct coordinate plane');
+      return false;
+    }
+    
+    // Find extreme points for coordinate plane
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    let sumX = 0, sumY = 0;
+    
+    window.calibrationPoints.forEach(point => {
+      const x = point.expected[0];
+      const y = point.expected[1];
+      
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
+      
+      sumX += x;
+      sumY += y;
+    });
+    
+    // Construct the coordinate plane
+    window.screenCoordinatePlane = {
+      initialized: true,
+      topLeft: { x: minX, y: maxY },
+      topRight: { x: maxX, y: maxY },
+      bottomLeft: { x: minX, y: minY },
+      bottomRight: { x: maxX, y: minY },
+      centerPoint: { x: sumX / window.calibrationPoints.length, y: sumY / window.calibrationPoints.length },
+      width: maxX - minX,
+      height: maxY - minY
+    };
+    
+    console.log('Coordinate plane constructed:', window.screenCoordinatePlane);
+    psychoJS.experiment.addData('coordinatePlaneConstructed', true);
+    psychoJS.experiment.addData('coordinatePlane', JSON.stringify(window.screenCoordinatePlane));
+    
+    return true;
+  };
+  
+  // Ensure calibration trials data is loaded
+  window.ensureCalibrationTrialsLoaded = async function() {
+    try {
+      // Check if calibration trials data is already loaded
+      if (!psychoJS.serverManager.getResource('calibration_trials.xlsx')) {
+        console.log('Loading calibration trials data...');
+        await psychoJS.serverManager.prepareResource('calibration_trials.xlsx');
+      }
+      return true;
+    } catch (error) {
+      console.error('Failed to load calibration trials:', error);
+      psychoJS.experiment.addData('calibrationTrialsLoadError', error.message);
+      return false;
+    }
+  };
+  
   webcamWarning = new visual.TextStim({
     win: psychoJS.window,
     name: 'webcamWarning',
@@ -723,6 +794,20 @@ function trialsLoopBegin(trialsLoopScheduler, snapshot) {
 async function trialsLoopEnd() {
   psychoJS.experiment.removeLoop(trials);
 
+  // Ensure coordinate plane is constructed after all calibration trials
+  if (!window.screenCoordinatePlane.initialized) {
+    console.log('Attempting to construct coordinate plane after all calibration trials');
+    if (window.constructCoordinatePlane()) {
+      console.log('Successfully constructed coordinate plane after all calibration trials');
+    } else {
+      console.warn('Failed to construct coordinate plane - not enough calibration points');
+      // Log the issue
+      psychoJS.experiment.addData('coordinatePlaneError', 'Failed to construct - insufficient points');
+    }
+  } else {
+    console.log('Coordinate plane already constructed');
+  }
+
   return Scheduler.Event.NEXT;
 }
 
@@ -945,6 +1030,13 @@ function calibrationRoutineEnd() {
       psychoJS.experiment.addData('calibrationPointCount', window.calibrationPoints.length);
       
       console.log('Updated calibration quality metrics:', window.trackingAccuracy);
+      
+      // Attempt to construct coordinate plane if we have enough points
+      if (window.calibrationPoints.length >= 5 && !window.screenCoordinatePlane.initialized) {
+        if (window.constructCoordinatePlane()) {
+          console.log('Successfully constructed coordinate plane after calibration point');
+        }
+      }
     }
     
     return Scheduler.Event.NEXT;
@@ -970,6 +1062,37 @@ function trackingTrialRoutineBegin(snapshot) {
     // Remove the click tracker used for calibration
     window.webgazer.removeMouseEventListeners();
     
+    // Verify the coordinate plane was constructed
+    if (!window.screenCoordinatePlane.initialized) {
+      console.warn('Coordinate plane not initialized yet. Attempting to construct now.');
+      if (window.constructCoordinatePlane()) {
+        console.log('Successfully constructed coordinate plane during tracking trial');
+      } else {
+        console.error('Failed to construct coordinate plane - proceeding with default values');
+        // Set default values based on window size
+        var canvas = psychoJS.window.size;
+        window.screenCoordinatePlane = {
+          initialized: true,
+          topLeft: { x: -canvas[0]/2, y: canvas[1]/2 },
+          topRight: { x: canvas[0]/2, y: canvas[1]/2 },
+          bottomLeft: { x: -canvas[0]/2, y: -canvas[1]/2 },
+          bottomRight: { x: canvas[0]/2, y: -canvas[1]/2 },
+          centerPoint: { x: 0, y: 0 },
+          width: canvas[0],
+          height: canvas[1]
+        };
+        psychoJS.experiment.addData('coordinatePlaneDefaulted', true);
+      }
+    }
+    
+    // Log the coordinate plane metrics to verify it was constructed
+    psychoJS.experiment.addData('coordinatePlaneStatus', window.screenCoordinatePlane.initialized);
+    psychoJS.experiment.addData('coordinatePlaneDimensions', 
+                              JSON.stringify({
+                                width: window.screenCoordinatePlane.width,
+                                height: window.screenCoordinatePlane.height
+                              }));
+    
     //hide the video thumbnail 
     document.getElementById('webgazerFaceFeedbackBox').style.display = 'none';
     document.getElementById('webgazerVideoFeed').style.display = 'none';
@@ -994,6 +1117,57 @@ function trackingTrialRoutineEachFrame() {
     t = trackingTrialClock.getTime();
     frameN = frameN + 1;// number of completed frames (so 0 is the first frame)
     // update/draw components on each frame
+    
+    // Set tracking square position based on latest gaze position
+    // Calculate average gaze position
+    if (window.xGazes && window.yGazes && window.xGazes.length > 0 && window.yGazes.length > 0) {
+      // Convert raw gaze data to coordinate plane
+      // Get average of recent gaze positions
+      var sumX = 0;
+      var sumY = 0;
+      var validPoints = 0;
+      
+      for (var i = 0; i < window.xGazes.length; i++) {
+        if (window.xGazes[i] !== 0 || window.yGazes[i] !== 0) {
+          sumX += window.xGazes[i];
+          sumY += window.yGazes[i];
+          validPoints++;
+        }
+      }
+      
+      // Only update if we have valid gaze data
+      if (validPoints > 0) {
+        var avgX = sumX / validPoints;
+        var avgY = sumY / validPoints;
+        
+        // Map raw coordinates to experiment coordinate system if coordinate plane is initialized
+        if (window.screenCoordinatePlane.initialized) {
+          // Normalize coordinates to 0-1 range based on screen dimensions
+          var normalizedX = (avgX - window.screenCoordinatePlane.topLeft.x) / window.screenCoordinatePlane.width;
+          var normalizedY = (avgY - window.screenCoordinatePlane.topLeft.y) / window.screenCoordinatePlane.height;
+          
+          // Map to PsychoJS coordinate system (-1 to 1)
+          var mappedX = (normalizedX * 2) - 1;
+          var mappedY = -((normalizedY * 2) - 1); // Y is flipped in browser coordinates
+          
+          // Update tracking square position with the mapped coordinates
+          tracking_square.setPos([mappedX, mappedY]);
+          
+          // Record mapping data periodically (every 30 frames) to avoid excessive data
+          if (frameN % 30 === 0) {
+            psychoJS.experiment.addData('gazeMapping', JSON.stringify({
+              raw: [avgX, avgY],
+              normalized: [normalizedX, normalizedY],
+              mapped: [mappedX, mappedY],
+              frameN: frameN
+            }));
+          }
+        } else {
+          // Fallback if coordinate plane not initialized
+          tracking_square.setPos([avgX, avgY]);
+        }
+      }
+    }
     
     // *tracking_square* updates
     if (t >= 0.0 && tracking_square.status === PsychoJS.Status.NOT_STARTED) {
@@ -1075,56 +1249,6 @@ function trackingTrialRoutineEachFrame() {
         // Record that eyes exited validation box
         psychoJS.experiment.addData('eyesExitedBox', Date.now());
       }
-    }
-    
-    // Update tracking square with smoothed gaze position
-    if (window.xGazes && window.yGazes) {
-      // Calculate weighted average with more weight on recent gaze points
-      const weights = window.xGazes.map((_, i) => i + 1);  // 1, 2, 3, ...
-      const weightSum = weights.reduce((a, b) => a + b, 0);
-      
-      let weightedX = 0;
-      let weightedY = 0;
-      
-      for (let i = 0; i < window.xGazes.length; i++) {
-        weightedX += window.xGazes[i] * weights[i];
-        weightedY += window.yGazes[i] * weights[i];
-      }
-      
-      // Normalize by weight sum
-      let x = weightedX / weightSum;
-      let y = weightedY / weightSum;
-      
-      // Set tracking square to weighted x and y, transformed to height units
-      tracking_square.setPos(
-        util.to_height(
-          [
-            x - psychoJS.window.size[0] / 2,
-            -1 * (y - psychoJS.window.size[1] / 2)
-          ], 
-          'pix', 
-          psychoJS.window
-        )
-      );
-      
-      // Change square color based on confidence in gaze tracking
-      const xVariance = calculateVariance(window.xGazes);
-      const yVariance = calculateVariance(window.yGazes);
-      const totalVariance = xVariance + yVariance;
-      
-      // Change color based on variance (more variance = less confident = more red)
-      const varianceThreshold = 10000; // Adjust based on your needs
-      const confidenceRatio = Math.min(1, totalVariance / varianceThreshold);
-      const red = confidenceRatio;
-      const green = 1 - confidenceRatio;
-      const blue = 0;
-      
-      tracking_square.setFillColor(new util.Color([red, green, blue]));
-      
-      // Record current gaze position and confidence for this frame
-      psychoJS.experiment.addData('currentGazeX', x);
-      psychoJS.experiment.addData('currentGazeY', y);
-      psychoJS.experiment.addData('gazeConfidence', 1 - confidenceRatio);
     }
     
     // check for quit (typically the Esc key)
