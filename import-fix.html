@@ -105,6 +105,11 @@
             console.log.apply(console, arguments);
           }
         },
+        // Initialize core namespace
+        core: {},
+        data: {},
+        util: {},
+        visual: {}
       };
       
       // Sequential resource loader
@@ -143,29 +148,20 @@
           
           // Step 4: Load experiment as ES module
           updateStatus('Starting experiment...');
-          logMessage('Creating module script for experiment');
+          logMessage('Loading experiment script');
           
-          // Create a new script element for the experiment module
-          const moduleScript = document.createElement('script');
-          moduleScript.type = 'module';
-          moduleScript.textContent = `
-            try {
-              // Import the experiment module
-              import { core, data, sound, util, visual } from './lib/psychojs-2021.2.3.js';
-              
-              // Now import the experiment logic
-              import './extended_session_experiment.js';
-              
-              console.log('Experiment module loaded successfully');
-              document.getElementById('loading-screen').style.display = 'none';
-            } catch (error) {
-              console.error('Failed to load experiment module:', error);
-              document.getElementById('load-status').textContent = 'Error loading experiment';
-              document.getElementById('load-status').style.color = '#F44336';
-              document.getElementById('loader-log').innerHTML += '<div class="log-item error">Module error: ' + error.message + '</div>';
-            }
-          `;
-          document.body.appendChild(moduleScript);
+          // Create a new script element for the experiment
+          const experimentScript = document.createElement('script');
+          experimentScript.src = './extended_session_experiment-no-modules.js';
+          experimentScript.onload = () => {
+            logMessage('Experiment loaded successfully');
+            document.getElementById('loading-screen').style.display = 'none';
+          };
+          experimentScript.onerror = (error) => {
+            logMessage(`Failed to load experiment: ${error}`, 'error');
+            updateStatus('Error loading experiment');
+          };
+          document.body.appendChild(experimentScript);
           
         } catch (error) {
           updateStatus('Error loading resources');

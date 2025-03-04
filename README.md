@@ -24,7 +24,7 @@ The experiment consists of the following main files:
 1. Ensure all files are present in the correct locations
 2. Start a local web server:
 
-   ```
+   ```bash
    python -m http.server 8000
    ```
 

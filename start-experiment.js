@@ -19,8 +19,10 @@ const requiredFiles = [
     './import-fix.html',
     './extended_session_experiment.js',
     './extended_session_experiment-legacy-browsers.js',
+    './extended_session_experiment-no-modules.js',
     './lib/psychojs-2021.2.3.js',
-    './webgazer-2.0.1.js'
+    './webgazer-2.0.1.js',
+    './calibration_trials.xlsx'
 ];
 
 console.log('🔍 Checking for required files...');
@@ -44,7 +46,8 @@ const mimeTypes = {
     '.png': 'image/png',
     '.jpg': 'image/jpeg',
     '.gif': 'image/gif',
-    '.svg': 'image/svg+xml'
+    '.svg': 'image/svg+xml',
+    '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 };
 
 // Create HTTP server
@@ -59,6 +62,14 @@ const server = http.createServer((req, res) => {
     // Default to import-fix.html if the path is '/'
     if (pathname === './') {
         pathname = './import-fix.html';
+    }
+    
+    // Handle missing source map files gracefully
+    if (pathname.endsWith('.map')) {
+        console.log(`ℹ️ Source map requested but not required: ${pathname}`);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end('{}');
+        return;
     }
     
     // Get the file extension
