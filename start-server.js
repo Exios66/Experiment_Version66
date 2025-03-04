@@ -48,7 +48,9 @@ const spaPaths = [
 const moduleFiles = [
     'extended_session_experiment.js',
     'module-wrapper.js',
-    'extended_session_experiment-module-wrapper.js'
+    'extended_session_experiment-module-wrapper.js',
+    'psychojs-2021.2.3.js',  // Add PsychoJS to modules list
+    'webgazer-module.js'     // Add any other potential modules
 ];
 
 // Common source map files that might be requested but are usually not available
@@ -64,6 +66,7 @@ const commonMissingMaps = [
 function checkIfModuleFile(pathname) {
     // Always treat listed module files as modules
     if (moduleFiles.some(modFile => pathname.includes(modFile))) {
+        console.log(`Known module file: ${pathname}`);
         return true;
     }
     
@@ -71,23 +74,40 @@ function checkIfModuleFile(pathname) {
     if (pathname.endsWith('.js') && fs.existsSync(pathname)) {
         try {
             const content = fs.readFileSync(pathname, 'utf8');
-            const firstFewLines = content.split('\n').slice(0, 20).join('\n');
             
-            // Check for import or export statements
-            if (firstFewLines.includes('import ') || 
+            // Better module detection: check first 50 lines for import/export statements
+            const firstFewLines = content.split('\n').slice(0, 50).join('\n');
+            
+            // Check for various module patterns
+            const hasModuleSyntax = (
+                firstFewLines.includes('import ') || 
                 firstFewLines.includes('export ') || 
-                firstFewLines.match(/import\s*{/)) {
-                console.log(`Detected module file: ${pathname}`);
+                firstFewLines.includes('export default') ||
+                firstFewLines.includes('export {') ||
+                firstFewLines.includes('export const') ||
+                firstFewLines.includes('export function') ||
+                firstFewLines.match(/import\s*{/) ||
+                firstFewLines.match(/import\s*\*/) ||
+                firstFewLines.match(/from\s*['"]/)
+            );
+            
+            if (hasModuleSyntax) {
+                console.log(`Detected module file from content: ${pathname}`);
+                
                 // Add to known module files for future requests
                 if (!moduleFiles.some(modFile => pathname.includes(modFile))) {
-                    moduleFiles.push(path.basename(pathname));
+                    const basename = path.basename(pathname);
+                    moduleFiles.push(basename);
+                    console.log(`Added ${basename} to known module files`);
                 }
+                
                 return true;
             }
         } catch (err) {
             console.error(`Error checking module file: ${pathname}`, err);
         }
     }
+    
     return false;
 }
 
@@ -153,16 +173,22 @@ const server = http.createServer((req, res) => {
     
     // Override MIME type for JavaScript modules
     if (isModule) {
+        console.log(`Serving JS file: ${pathname} as module`);
         contentType = 'application/javascript';
         
         // Add special headers for modules
         res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
         res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
-    }
-    
-    // Log the file type detection for JavaScript files
-    if (ext === '.js') {
-        console.log(`Serving JS file: ${pathname} as ${isModule ? 'module' : 'regular script'}`);
+        
+        // Set proper MIME type for modules
+        res.setHeader('Content-Type', 'application/javascript');
+        
+        // Special logging for the main experiment script
+        if (pathname.includes('extended_session_experiment.js')) {
+            console.log(`Serving extended session experiment script`);
+        }
+    } else {
+        console.log(`Serving JS file: ${pathname} as regular script`);
     }
     
     // Special case for the webgazer library and its source map
@@ -250,11 +276,6 @@ const server = http.createServer((req, res) => {
         
         // If the file is found, send it with the correct content type
         res.writeHead(200, { 'Content-Type': contentType });
-        
-        // For JavaScript files, we can add module type if needed
-        if (ext === '.js' && pathname.includes('extended_session_experiment.js')) {
-            console.log('Serving extended session experiment script');
-        }
         
         res.end(data);
     });
