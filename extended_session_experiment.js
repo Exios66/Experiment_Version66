@@ -72,7 +72,7 @@ psychoJS.start({
   expName: expName,
   expInfo: expInfo,
   resources: [
-    {'name': 'calibration_trials.xlsx', 'path': './calibration_trials.xlsx'},
+    {'name': 'calibration_trials.csv', 'path': './calibration_trials.csv'},
     {'name': 'webgazer-2.0.1.js', 'path': './webgazer-2.0.1.js'},
     {'name': 'webgazer-2.0.1.tp.js', 'path': './webgazer-2.0.1.tp.js'},
     {'name': 'lib/psychojs-2021.2.3.js', 'path': './lib/psychojs-2021.2.3.js'},
@@ -204,9 +204,9 @@ async function experimentInit() {
   window.ensureCalibrationTrialsLoaded = async function() {
     try {
       // Check if calibration trials data is already loaded
-      if (!psychoJS.serverManager.getResource('calibration_trials.xlsx')) {
+      if (!psychoJS.serverManager.getResource('calibration_trials.csv')) {
         console.log('Loading calibration trials data...');
-        await psychoJS.serverManager.prepareResource('calibration_trials.xlsx');
+        await psychoJS.serverManager.prepareResource('calibration_trials.csv');
       }
       return true;
     } catch (error) {
