@@ -825,6 +825,17 @@ function calibrationRoutineBegin(snapshot) {
     continueRoutine = true; // until we're told otherwise
     routineTimer.add(3.500000);
     // update component parameters for each repeat
+    
+    // Define default values for calibration_x and calibration_y if they're not defined
+    if (typeof calibration_x === 'undefined') {
+      console.log("Warning: calibration_x was undefined. Using default value of 0.");
+      calibration_x = 0;
+    }
+    if (typeof calibration_y === 'undefined') {
+      console.log("Warning: calibration_y was undefined. Using default value of 0.");
+      calibration_y = 0;
+    }
+    
     // Position calibration_square using width and height of window
     var canvas = psychoJS.window.size;
     var scaling = [
