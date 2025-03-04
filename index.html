@@ -53,38 +53,68 @@
       onload="console.log('PsychoJS library loaded successfully')"
       onerror="console.error('Failed to load PsychoJS library'); document.getElementById('root').innerHTML = '<div style=\'color: red; margin: 20px; font-family: sans-serif;\'><h1>Error Loading PsychoJS</h1><p>The PsychoJS library failed to load. Check the file path: ./lib/psychojs-2021.2.3.js</p></div>'"></script>
     
-    <!-- WebGazer eye tracking library -->
+    <!-- WebGazer eye tracking library - load synchronously before experiment script -->
     <script>
-      // Load WebGazer with error handling
       document.addEventListener('DOMContentLoaded', function() {
-        const script = document.createElement('script');
-        script.src = './webgazer-2.0.1.js';
-        script.onload = function() {
-          console.log('WebGazer loaded successfully from primary file');
-        };
-        script.onerror = function() {
-          console.error('Failed to load WebGazer from webgazer-2.0.1.js. Trying alternate file...');
-          const altScript = document.createElement('script');
-          altScript.src = './webgazer-2.0.1.tp.js';
-          altScript.onload = function() {
-            console.log('WebGazer loaded successfully from alternate file');
+        console.log('DOM fully loaded, initializing resources...');
+        
+        // First load WebGazer
+        const loadWebGazer = new Promise(function(resolve, reject) {
+          const script = document.createElement('script');
+          script.src = './webgazer-2.0.1.js';
+          script.onload = function() {
+            console.log('WebGazer loaded successfully from primary file');
+            resolve('primary');
           };
-          altScript.onerror = function() {
-            console.error('Failed to load WebGazer from alternate file. The experiment may not work correctly.');
+          script.onerror = function() {
+            console.error('Failed to load WebGazer from webgazer-2.0.1.js. Trying alternate file...');
+            const altScript = document.createElement('script');
+            altScript.src = './webgazer-2.0.1.tp.js';
+            altScript.onload = function() {
+              console.log('WebGazer loaded successfully from alternate file');
+              resolve('alternate');
+            };
+            altScript.onerror = function() {
+              reject('Failed to load WebGazer from both files');
+            };
+            document.head.appendChild(altScript);
+          };
+          document.head.appendChild(script);
+        });
+        
+        // Then load experiment script after WebGazer is ready
+        loadWebGazer.then(function(source) {
+          console.log(`WebGazer loaded from ${source} source, now loading experiment script...`);
+          
+          const expScript = document.createElement('script');
+          expScript.src = './extended_session_experiment.js';
+          expScript.type = 'module';
+          expScript.onload = function() {
+            console.log('Experiment script loaded successfully');
+          };
+          expScript.onerror = function() {
+            console.error('Failed to load experiment script');
             document.getElementById('root').innerHTML += '<div style="color: red; padding: 10px; border: 1px solid red; margin: 10px; font-family: sans-serif;">' +
-              '<h3>WebGazer Failed to Load</h3>' +
-              '<p>The eye tracking library could not be loaded. The experiment will not function correctly.</p>' +
+              '<h3>Experiment Script Failed to Load</h3>' +
+              '<p>The main experiment script could not be loaded. Check the file path and console for errors.</p>' +
               '</div>';
           };
-          document.head.appendChild(altScript);
-        };
-        document.head.appendChild(script);
+          document.body.appendChild(expScript);
+          
+          // Legacy browsers support
+          const legacyScript = document.createElement('script');
+          legacyScript.src = './extended_session_experiment-legacy-browsers.js';
+          legacyScript.setAttribute('nomodule', '');
+          document.body.appendChild(legacyScript);
+        }).catch(function(error) {
+          console.error(error);
+          document.getElementById('root').innerHTML += '<div style="color: red; padding: 10px; border: 1px solid red; margin: 10px; font-family: sans-serif;">' +
+            '<h3>WebGazer Failed to Load</h3>' +
+            '<p>The eye tracking library could not be loaded. The experiment will not function correctly.</p>' +
+            '<p>Error: ' + error + '</p>' +
+            '</div>';
+        });
       });
     </script>
-    
-    <!-- experiment -->
-    <script src="./extended_session_experiment.js" type="module"></script>
-    <!-- legacy browsers -->
-    <script src="./extended_session_experiment-legacy-browsers.js" nomodule></script>
   </body>
 </html>
