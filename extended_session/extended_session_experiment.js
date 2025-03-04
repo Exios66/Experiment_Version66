@@ -247,20 +247,43 @@ function initializeEyetrackingRoutineBegin(snapshot) {
     
     // Configure data collection
     const exportGazeData = () => {
-      if (window.gazeDataBuffer.length > 0) {
-        // Add current batch of gaze data to experiment data
-        const batchData = {
-          timestamp: Date.now(),
-          gazePoints: window.gazeDataBuffer
-        };
-        psychoJS.experiment.addData('gazeBatch_' + batchData.timestamp, JSON.stringify(batchData));
+      try {
+        if (window.gazeDataBuffer && window.gazeDataBuffer.length > 0) {
+          // Add current batch of gaze data to experiment data
+          const batchData = {
+            timestamp: Date.now(),
+            sessionId: expInfo.participant + '_' + expInfo.session,
+            frameRate: expInfo.frameRate,
+            gazePoints: window.gazeDataBuffer,
+            bufferSize: window.gazeDataBuffer.length
+          };
+          
+          // Add batch to experiment data with unique identifier
+          const batchKey = 'gazeBatch_' + batchData.timestamp;
+          psychoJS.experiment.addData(batchKey, JSON.stringify(batchData));
+          
+          // Log export details
+          console.log(`Exported gaze data batch at ${new Date(batchData.timestamp).toISOString()}: ${batchData.gazePoints.length} points`);
+          
+          // Clear buffer after successful export
+          window.gazeDataBuffer = [];
+          window.lastExportTime = Date.now();
+          
+          // Record export success in experiment data
+          psychoJS.experiment.addData('gazeExportSuccess', true);
+          psychoJS.experiment.addData('gazeExportTimestamp', batchData.timestamp);
+          psychoJS.experiment.addData('gazeExportSize', batchData.bufferSize);
+        } else {
+          console.log('No gaze data to export at', new Date().toISOString());
+        }
+      } catch (error) {
+        // Handle export errors gracefully
+        console.error('Error exporting gaze data:', error);
+        psychoJS.experiment.addData('gazeExportError', error.message);
         
-        // Clear buffer after export
+        // Attempt recovery by clearing buffer
         window.gazeDataBuffer = [];
         window.lastExportTime = Date.now();
-        
-        // Log export
-        console.log('Exported gaze data batch at', new Date().toISOString());
       }
     };
     
@@ -828,7 +851,38 @@ function calibrationRoutineEnd() {
     psychoJS.experiment.addData('calibrationClick.midButton', _mouseButtons[1]);
     psychoJS.experiment.addData('calibrationClick.rightButton', _mouseButtons[2]);
     if (calibrationClick.clicked_name.length > 0) {
-      psychoJS.experiment.addData('calibrationClick.clicked_name', calibrationClick.clicked_name[0]);}
+      psychoJS.experiment.addData('calibrationClick.clicked_name', calibrationClick.clicked_name[0]);
+    }
+    
+    // Store calibration point for analysis
+    window.calibrationPoints.push({
+      expected: [calibration_x, calibration_y],
+      clicked: [_mouseXYs[0], _mouseXYs[1]],
+      timestamp: Date.now()
+    });
+    
+    // Calculate and store current calibration metrics
+    if (window.calibrationPoints.length > 0) {
+      // Calculate average error in x and y directions
+      let totalErrorX = 0;
+      let totalErrorY = 0;
+      
+      window.calibrationPoints.forEach(point => {
+        totalErrorX += Math.abs(point.expected[0] - point.clicked[0]);
+        totalErrorY += Math.abs(point.expected[1] - point.clicked[1]);
+      });
+      
+      window.trackingAccuracy.x = totalErrorX / window.calibrationPoints.length;
+      window.trackingAccuracy.y = totalErrorY / window.calibrationPoints.length;
+      
+      // Store current calibration quality
+      psychoJS.experiment.addData('calibrationQuality_x', window.trackingAccuracy.x);
+      psychoJS.experiment.addData('calibrationQuality_y', window.trackingAccuracy.y);
+      psychoJS.experiment.addData('calibrationPointCount', window.calibrationPoints.length);
+      
+      console.log('Updated calibration quality metrics:', window.trackingAccuracy);
+    }
+    
     return Scheduler.Event.NEXT;
   };
 }
@@ -920,37 +974,95 @@ function trackingTrialRoutineEachFrame() {
       }
     }
     
-    // Hide webcam thumbnail if eyes are in validation box
-    if (webgazer.checkEyesInValidationBox() === true) {
-      // If last time that eyes were outside of validation box was longer than 
-      // window.eyesReturnedDelay ago, hide thumbnail
-      if (
-        document.getElementById('webgazerFaceFeedbackBox').style.display != 'none' &&
-        (new Date).getTime() > window.eyesExitedTimestamp + window.eyesReturnedDelay
-      ) {   
-        document.getElementById('webgazerFaceFeedbackBox').style.display = 'none';
-        document.getElementById('webgazerVideoFeed').style.display = 'none';
+    // Manage webcam display based on eye position
+    if (window.webgazer && window.webgazer.checkEyesInValidationBox) {
+      // Handle eye position validation
+      const eyesInBox = window.webgazer.checkEyesInValidationBox();
+      
+      if (eyesInBox === true) {
+        // If eyes are in validation box
+        if (
+          document.getElementById('webgazerFaceFeedbackBox') && 
+          document.getElementById('webgazerFaceFeedbackBox').style.display !== 'none' &&
+          (Date.now() > window.eyesExitedTimestamp + window.eyesReturnedDelay)
+        ) {   
+          // Hide webcam elements after delay
+          if (document.getElementById('webgazerFaceFeedbackBox')) {
+            document.getElementById('webgazerFaceFeedbackBox').style.display = 'none';
+          }
+          if (document.getElementById('webgazerVideoFeed')) {
+            document.getElementById('webgazerVideoFeed').style.display = 'none';
+          }
+          
+          // Record when we hid the webcam
+          psychoJS.experiment.addData('webcamHidden', Date.now());
+        }
+      } else {
+        // Eyes outside of validation box; show webcam elements and record timestamp
+        window.eyesExitedTimestamp = Date.now();
+        
+        if (document.getElementById('webgazerFaceFeedbackBox')) {
+          document.getElementById('webgazerFaceFeedbackBox').style.display = 'block';
+        }
+        if (document.getElementById('webgazerVideoFeed')) {
+          document.getElementById('webgazerVideoFeed').style.display = 'block';
+        }
+        
+        // Record that eyes exited validation box
+        psychoJS.experiment.addData('eyesExitedBox', Date.now());
       }
-    } else {
-        // Eyes outside of validation box; show thumbnail
-        window.eyesExitedTimestamp = (new Date).getTime();
-        document.getElementById('webgazerFaceFeedbackBox').style.display = 'block';
-        document.getElementById('webgazerVideoFeed').style.display = 'block';
     }
-    // Update tracking square to the average of last n gazes
-    let x = util.sum(window.xGazes) / window.xGazes.length;
-    let y = util.sum(window.yGazes) / window.yGazes.length;
-    // Set tracking square to x and y, transformed to height units
-    tracking_square.setPos(
-      util.to_height(
-        [
-          x - psychoJS.window.size[0] / 2,
-          -1 * (y - psychoJS.window.size[1] / 2)
-        ], 
-        'pix', 
-        psychoJS.window
-      )
-    );
+    
+    // Update tracking square with smoothed gaze position
+    if (window.xGazes && window.yGazes) {
+      // Calculate weighted average with more weight on recent gaze points
+      const weights = window.xGazes.map((_, i) => i + 1);  // 1, 2, 3, ...
+      const weightSum = weights.reduce((a, b) => a + b, 0);
+      
+      let weightedX = 0;
+      let weightedY = 0;
+      
+      for (let i = 0; i < window.xGazes.length; i++) {
+        weightedX += window.xGazes[i] * weights[i];
+        weightedY += window.yGazes[i] * weights[i];
+      }
+      
+      // Normalize by weight sum
+      let x = weightedX / weightSum;
+      let y = weightedY / weightSum;
+      
+      // Set tracking square to weighted x and y, transformed to height units
+      tracking_square.setPos(
+        util.to_height(
+          [
+            x - psychoJS.window.size[0] / 2,
+            -1 * (y - psychoJS.window.size[1] / 2)
+          ], 
+          'pix', 
+          psychoJS.window
+        )
+      );
+      
+      // Change square color based on confidence in gaze tracking
+      const xVariance = calculateVariance(window.xGazes);
+      const yVariance = calculateVariance(window.yGazes);
+      const totalVariance = xVariance + yVariance;
+      
+      // Change color based on variance (more variance = less confident = more red)
+      const varianceThreshold = 10000; // Adjust based on your needs
+      const confidenceRatio = Math.min(1, totalVariance / varianceThreshold);
+      const red = confidenceRatio;
+      const green = 1 - confidenceRatio;
+      const blue = 0;
+      
+      tracking_square.setFillColor(new util.Color([red, green, blue]));
+      
+      // Record current gaze position and confidence for this frame
+      psychoJS.experiment.addData('currentGazeX', x);
+      psychoJS.experiment.addData('currentGazeY', y);
+      psychoJS.experiment.addData('gazeConfidence', 1 - confidenceRatio);
+    }
+    
     // check for quit (typically the Esc key)
     if (psychoJS.experiment.experimentEnded || psychoJS.eventManager.getKeys({keyList:['escape']}).length > 0) {
       return quitPsychoJS('The [Escape] key was pressed. Goodbye!', false);
@@ -977,6 +1089,11 @@ function trackingTrialRoutineEachFrame() {
   };
 }
 
+// Helper function to calculate variance
+function calculateVariance(array) {
+  const mean = array.reduce((a, b) => a + b, 0) / array.length;
+  return array.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / array.length;
+}
 
 function trackingTrialRoutineEnd() {
   return async function () {
@@ -990,9 +1107,50 @@ function trackingTrialRoutineEnd() {
     if (typeof tracking_resp.keys !== 'undefined') {  // we had a response
         psychoJS.experiment.addData('tracking_resp.rt', tracking_resp.rt);
         routineTimer.reset();
-        }
+    }
     
     tracking_resp.stop();
+    
+    // Save tracking session summary data
+    if (window.gazeDataBuffer && window.gazeDataBuffer.length > 0) {
+      // Force an immediate export of any remaining gaze data
+      const batchData = {
+        timestamp: Date.now(),
+        gazePoints: window.gazeDataBuffer,
+        isFinal: true
+      };
+      psychoJS.experiment.addData('finalGazeBatch', JSON.stringify(batchData));
+      
+      // Clear buffer after export
+      window.gazeDataBuffer = [];
+      console.log('Exported final gaze data batch');
+    }
+    
+    // Calculate and store tracking session metrics
+    if (window.trackingAccuracy) {
+      // Final calibration accuracy
+      psychoJS.experiment.addData('finalCalibrationAccuracy_x', window.trackingAccuracy.x);
+      psychoJS.experiment.addData('finalCalibrationAccuracy_y', window.trackingAccuracy.y);
+    }
+    
+    // Add summary of tracking trial
+    const summary = {
+      duration: trackingTrialClock.getTime(),
+      pointCount: window.calibrationPoints ? window.calibrationPoints.length : 0,
+      userResponse: tracking_resp.keys,
+      responseTime: tracking_resp.rt
+    };
+    
+    psychoJS.experiment.addData('trackingTrialSummary', JSON.stringify(summary));
+    
+    try {
+      // Save data to server after trial is complete
+      await psychoJS.experiment.save();
+      console.log('Trial data successfully saved to server');
+    } catch (error) {
+      console.error('Failed to save trial data:', error);
+    }
+    
     // the Routine "trackingTrial" was not non-slip safe, so reset the non-slip timer
     routineTimer.reset();
     
