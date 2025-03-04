@@ -41,6 +41,7 @@ console.log('✅ All required files found.');
 const mimeTypes = {
     '.html': 'text/html',
     '.js': 'text/javascript',
+    '.mjs': 'text/javascript', // Explicitly handle JavaScript modules
     '.css': 'text/css',
     '.json': 'application/json',
     '.png': 'image/png',
@@ -50,8 +51,7 @@ const mimeTypes = {
     '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 };
 
-// Create HTTP server
-console.log('🚀 Starting local server...');
+// Create server
 const server = http.createServer((req, res) => {
     // Parse the URL
     const parsedUrl = url.parse(req.url);
@@ -59,38 +59,39 @@ const server = http.createServer((req, res) => {
     // Extract the path from the URL
     let pathname = `.${parsedUrl.pathname}`;
     
-    // Default to import-fix.html if the path is '/'
+    // Default to index.html if the path is '/'
     if (pathname === './') {
-        pathname = './import-fix.html';
-    }
-    
-    // Handle missing source map files gracefully
-    if (pathname.endsWith('.map')) {
-        console.log(`ℹ️ Source map requested but not required: ${pathname}`);
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end('{}');
-        return;
+        console.log('Serving index.html as default page');
+        pathname = './index.html';
     }
     
     // Get the file extension
     const ext = path.parse(pathname).ext;
     
-    // Map file extension to MIME type
-    const contentType = mimeTypes[ext] || 'application/octet-stream';
+    // Set the correct MIME type
+    let contentType = mimeTypes[ext] || 'application/octet-stream';
+    
+    // Add module MIME type for ES6 modules if requested
+    if (ext === '.js' && req.headers['sec-fetch-dest'] === 'script' && 
+        req.headers['sec-fetch-mode'] === 'cors' && 
+        req.headers.accept && req.headers.accept.includes('application/javascript')) {
+        contentType = 'application/javascript';
+        console.log('Serving JavaScript as module:', pathname);
+    }
     
     // Read the file
     fs.readFile(pathname, (err, data) => {
         if (err) {
             // If the file is not found
             if (err.code === 'ENOENT') {
-                console.error(`❌ File not found: ${pathname}`);
+                console.error(`File not found: ${pathname}`);
                 res.writeHead(404);
                 res.end(`File not found: ${pathname}`);
                 return;
             }
             
             // For other errors
-            console.error(`❌ Server error: ${err}`);
+            console.error(`Server error: ${err}`);
             res.writeHead(500);
             res.end(`Server error: ${err.code}`);
             return;
@@ -98,6 +99,12 @@ const server = http.createServer((req, res) => {
         
         // If the file is found, send it with the correct content type
         res.writeHead(200, { 'Content-Type': contentType });
+        
+        // For JavaScript files, we can add module type if needed
+        if (ext === '.js' && pathname.includes('extended_session_experiment.js')) {
+            console.log('Serving extended session experiment script');
+        }
+        
         res.end(data);
     });
 });

@@ -46,18 +46,107 @@
           }
         },
       };
+      
+      // AudioContext handling for warnings
+      window.fixAudioContext = function() {
+        // Find any AudioContext instances that might exist
+        if (typeof window.AudioContext !== 'undefined' || typeof window.webkitAudioContext !== 'undefined') {
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          
+          // Patch the AudioContext prototype
+          const originalConstructor = AudioContextClass;
+          window.AudioContext = window.webkitAudioContext = function() {
+            const instance = new originalConstructor();
+            
+            // Automatically resume on user interaction
+            const resumeAudio = function() {
+              if (instance.state !== 'running') {
+                instance.resume().then(function() {
+                  console.log('AudioContext resumed successfully');
+                }).catch(function(err) {
+                  console.warn('Failed to resume AudioContext:', err);
+                });
+              }
+            };
+            
+            // Add listeners for user interactions
+            document.addEventListener('click', resumeAudio, { once: true });
+            document.addEventListener('touchstart', resumeAudio, { once: true });
+            document.addEventListener('keydown', resumeAudio, { once: true });
+            
+            return instance;
+          };
+          
+          // Copy prototype properties
+          window.AudioContext.prototype = originalConstructor.prototype;
+          if (window.webkitAudioContext) {
+            window.webkitAudioContext.prototype = originalConstructor.prototype;
+          }
+          
+          console.log('AudioContext patched to auto-resume on user interaction');
+        }
+      };
+      
+      // Apply the fix when the page loads
+      document.addEventListener('DOMContentLoaded', function() {
+        window.fixAudioContext();
+      });
     </script>
     
     <!-- WebGazer eye tracking library -->
-    <script src="./webgazer-2.0.1.js" onerror="
-      console.error('Failed to load WebGazer from primary file, trying alternate...');
-      const altScript = document.createElement('script');
-      altScript.src = './webgazer-2.0.1.tp.js';
-      altScript.onerror = function() {
-        document.getElementById('root').innerHTML += '<div style=\'color: red; padding: 10px; border: 1px solid red; margin: 10px; font-family: sans-serif;\'><h3>WebGazer Failed to Load</h3><p>The eye tracking library could not be loaded. The experiment will not function correctly.</p></div>';
-      };
-      document.head.appendChild(altScript);
-    "></script>
+    <script>
+      // Handle WebGazer initialization properly to avoid duplicate registrations
+      window.webgazerInitialized = false;
+      
+      function initializeWebGazer() {
+        if (window.webgazerInitialized) {
+          console.log('WebGazer already initialized, skipping');
+          return;
+        }
+        
+        console.log('Initializing WebGazer eye tracking');
+        
+        // Create a script element
+        const script = document.createElement('script');
+        script.src = './webgazer-2.0.1.js';
+        
+        script.onload = function() {
+          console.log('WebGazer loaded successfully');
+          window.webgazerInitialized = true;
+          
+          // Prevent multiple initializations
+          if (window.webgazer && typeof window.webgazer.begin === 'function') {
+            // Don't auto-start WebGazer - let the experiment control it
+            console.log('WebGazer ready to be used by experiment');
+          }
+        };
+        
+        script.onerror = function() {
+          console.error('Failed to load WebGazer from primary file, trying alternate...');
+          const altScript = document.createElement('script');
+          altScript.src = './webgazer-2.0.1.tp.js';
+          
+          altScript.onload = function() {
+            console.log('Alternate WebGazer loaded successfully');
+            window.webgazerInitialized = true;
+          };
+          
+          altScript.onerror = function() {
+            console.error('WebGazer not available - eye tracking will not be used');
+            document.getElementById('root').innerHTML += '<div style="color: red; padding: 10px; border: 1px solid red; margin: 10px; font-family: sans-serif;"><h3>WebGazer Failed to Load</h3><p>The eye tracking library could not be loaded. The experiment will not function correctly.</p></div>';
+          };
+          
+          document.head.appendChild(altScript);
+        };
+        
+        document.head.appendChild(script);
+      }
+      
+      // Initialize WebGazer when the page loads
+      document.addEventListener('DOMContentLoaded', function() {
+        setTimeout(initializeWebGazer, 500); // Slight delay to avoid race conditions
+      });
+    </script>
     
     <!-- PsychoJS library -->
     <script src="./lib/psychojs-2021.2.3.js" defer></script>
@@ -76,12 +165,25 @@
             '</div>';
         } else {
           console.log('PsychoJS library initialized successfully');
+          
+          // Monkey-patch the PsychoJS resource loading to handle ES6 modules
+          if (window.createjs && window.createjs.LoadQueue) {
+            const originalLoadJavascript = window.createjs.LoadQueue.prototype._loadJavascript;
+            window.createjs.LoadQueue.prototype._loadJavascript = function(item) {
+              // Check if this is the main experiment file
+              if (item.src.includes('extended_session_experiment.js')) {
+                console.log('Detected experiment module loading attempt, redirecting to wrapper');
+                item.src = './extended_session_experiment-no-modules.js';
+              }
+              return originalLoadJavascript.call(this, item);
+            };
+          }
         }
       });
     </script>
     
-    <!-- Main experiment - must be a module -->
-    <script type="module" src="./extended_session_experiment.js"></script>
+    <!-- Module wrapper for experiment -->
+    <script type="module" src="./extended_session_experiment-module-wrapper.js"></script>
     
     <!-- Fallback for browsers that don't support modules -->
     <script nomodule>

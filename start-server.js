@@ -10,7 +10,7 @@ const mimeTypes = {
     '.html': 'text/html',
     '.htm': 'text/html',
     '.js': 'text/javascript',
-    '.mjs': 'text/javascript',
+    '.mjs': 'text/javascript', // JavaScript modules
     '.css': 'text/css',
     '.json': 'application/json',
     '.png': 'image/png',
@@ -54,8 +54,24 @@ const server = http.createServer((req, res) => {
     // Get the file extension
     const ext = path.parse(pathname).ext;
     
-    // Map file extension to MIME type
-    const contentType = mimeTypes[ext] || 'application/octet-stream';
+    // Set the correct MIME type
+    let contentType = mimeTypes[ext] || 'application/octet-stream';
+    
+    // Handle JavaScript modules specially
+    if (ext === '.js' && (
+        pathname.includes('module-wrapper') || 
+        req.headers.accept && req.headers.accept.includes('application/javascript')
+    )) {
+        contentType = 'application/javascript';
+        res.setHeader('Content-Type', contentType);
+        
+        // Add special header for modules if needed
+        if (pathname.includes('module-wrapper')) {
+            // Important: Set CORS headers for module scripts
+            res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
+            res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
+        }
+    }
     
     // Read the file
     fs.readFile(pathname, (err, data) => {

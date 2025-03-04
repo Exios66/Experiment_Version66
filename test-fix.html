@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width">
+    <title>ES6 Module Fix Test</title>
+    <link rel="stylesheet" href="./lib/psychojs-2021.2.3.css">
+    <link rel="icon" type="image/svg+xml" href="./eye-favicon.svg">
+    
+    <style>
+      body {
+        background-color: #333;
+        color: white;
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 20px;
+      }
+      #status-container {
+        margin: 20px auto;
+        max-width: 800px;
+        padding: 20px;
+        background-color: rgba(0,0,0,0.5);
+        border-radius: 5px;
+      }
+      .success {
+        color: #4CAF50;
+      }
+      .error {
+        color: #f44336;
+      }
+      h1 {
+        text-align: center;
+      }
+      #log {
+        font-family: monospace;
+        padding: 10px;
+        background-color: #111;
+        border-radius: 5px;
+        margin-top: 20px;
+        white-space: pre-wrap;
+        height: 200px;
+        overflow-y: auto;
+      }
+    </style>
+    
+    <script>
+      // Log helper
+      const logEntries = [];
+      function log(message, type = 'info') {
+        const timestamp = new Date().toISOString().substring(11, 23);
+        const entry = `[${timestamp}] [${type.toUpperCase()}] ${message}`;
+        logEntries.push(entry);
+        
+        // Update log display if available
+        const logElement = document.getElementById('log');
+        if (logElement) {
+          logElement.textContent = logEntries.join('\n');
+          logElement.scrollTop = logElement.scrollHeight;
+        }
+        
+        // Also log to console
+        console[type](message);
+      }
+      
+      // Override console methods
+      const originalConsole = {
+        log: console.log,
+        info: console.info,
+        warn: console.warn,
+        error: console.error
+      };
+      
+      console.log = function() { log(Array.from(arguments).join(' '), 'log'); originalConsole.log.apply(console, arguments); };
+      console.info = function() { log(Array.from(arguments).join(' '), 'info'); originalConsole.info.apply(console, arguments); };
+      console.warn = function() { log(Array.from(arguments).join(' '), 'warn'); originalConsole.warn.apply(console, arguments); };
+      console.error = function() { log(Array.from(arguments).join(' '), 'error'); originalConsole.error.apply(console, arguments); };
+      
+      // PsychoJS configuration
+      window.psychoJS = {
+        debug: true,
+        collectIP: false,
+        hosts: {
+          local: '',
+          pavlovia: 'https://pavlovia.org'
+        },
+        log: function() {
+          if (window.psychoJS.debug) {
+            console.log.apply(console, arguments);
+          }
+        },
+      };
+      
+      // Global error handler
+      window.addEventListener('error', function(e) {
+        log(`Error: ${e.message} at ${e.filename}:${e.lineno}:${e.colno}`, 'error');
+        
+        // Update status
+        updateStatus('error', e.message);
+        
+        // Prevent default error handling
+        e.preventDefault();
+      });
+      
+      // Update status display
+      function updateStatus(type, message) {
+        const statusEl = document.getElementById('status');
+        if (statusEl) {
+          statusEl.className = type;
+          statusEl.textContent = message;
+        }
+      }
+      
+      // Test module loader
+      function testModuleLoader() {
+        log('Starting module loader test');
+        updateStatus('info', 'Testing module loader...');
+        
+        // Create a script tag with type="module"
+        const script = document.createElement('script');
+        script.type = 'module';
+        script.src = './extended_session_experiment.js';
+        
+        script.onload = function() {
+          log('Module script loaded successfully', 'info');
+          updateStatus('success', 'Module loaded successfully!');
+        };
+        
+        script.onerror = function(e) {
+          log('Module script failed to load: ' + e.message, 'error');
+          updateStatus('error', 'Module failed to load. Trying fallback...');
+          
+          // Try the non-module version
+          setTimeout(testNonModuleLoader, 1000);
+        };
+        
+        document.head.appendChild(script);
+      }
+      
+      // Test non-module loader
+      function testNonModuleLoader() {
+        log('Starting non-module loader test', 'info');
+        
+        const script = document.createElement('script');
+        script.src = './extended_session_experiment-no-modules.js';
+        
+        script.onload = function() {
+          log('Non-module script loaded successfully', 'info');
+          updateStatus('success', 'Non-module script loaded successfully!');
+        };
+        
+        script.onerror = function(e) {
+          log('Non-module script failed to load: ' + e.message, 'error');
+          updateStatus('error', 'All loading attempts failed.');
+        };
+        
+        document.head.appendChild(script);
+      }
+      
+      // Start tests when DOM is ready
+      document.addEventListener('DOMContentLoaded', function() {
+        log('DOM loaded', 'info');
+        
+        // Load PsychoJS library
+        const psychojsScript = document.createElement('script');
+        psychojsScript.src = './lib/psychojs-2021.2.3.js';
+        
+        psychojsScript.onload = function() {
+          log('PsychoJS library loaded', 'info');
+          
+          // Start module test after a short delay
+          setTimeout(testModuleLoader, 1000);
+        };
+        
+        psychojsScript.onerror = function() {
+          log('Failed to load PsychoJS library', 'error');
+          updateStatus('error', 'Failed to load PsychoJS library');
+        };
+        
+        document.head.appendChild(psychojsScript);
+      });
+    </script>
+  </head>
+  <body>
+    <div id="status-container">
+      <h1>ES6 Module Fix Test</h1>
+      <p>This page tests whether the ES6 module fix works on your browser.</p>
+      <p>Status: <span id="status" class="info">Loading...</span></p>
+      <hr>
+      <h2>Log</h2>
+      <div id="log"></div>
+    </div>
+    <div id="root"></div>
+  </body>
+</html> 
