@@ -11,12 +11,12 @@ const { exec } = require('child_process');
 
 // Configuration
 const PORT = 8080;
-const MAIN_URL = `http://localhost:${PORT}/index.html`;
+const MAIN_URL = `http://localhost:${PORT}/import-fix.html`;
 const TEST_URL = `http://localhost:${PORT}/resource-test.html`;
 
 // Check if required files exist before starting
 const requiredFiles = [
-    './index.html',
+    './import-fix.html',
     './extended_session_experiment.js',
     './extended_session_experiment-legacy-browsers.js',
     './lib/psychojs-2021.2.3.js',
@@ -56,9 +56,9 @@ const server = http.createServer((req, res) => {
     // Extract the path from the URL
     let pathname = `.${parsedUrl.pathname}`;
     
-    // Default to index.html if the path is '/'
+    // Default to import-fix.html if the path is '/'
     if (pathname === './') {
-        pathname = './index.html';
+        pathname = './import-fix.html';
     }
     
     // Get the file extension
@@ -119,7 +119,8 @@ server.listen(PORT, () => {
     });
     
     console.log('\n📋 Available URLs:');
-    console.log(`   - Main Experiment: ${MAIN_URL}`);
+    console.log(`   - Main Experiment (FIXED VERSION): ${MAIN_URL}`);
+    console.log(`   - Original Experiment: http://localhost:${PORT}/index.html`);
     console.log(`   - Resource Tester: ${TEST_URL}`);
     console.log('\n⚠️  Make sure to allow camera access when prompted!');
     console.log('⌨️  Press Ctrl+C to stop the server\n');
