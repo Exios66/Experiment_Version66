@@ -8,13 +8,35 @@ const PORT = 8080;
 // MIME types for different file extensions
 const mimeTypes = {
     '.html': 'text/html',
+    '.htm': 'text/html',
     '.js': 'text/javascript',
+    '.mjs': 'text/javascript',
     '.css': 'text/css',
     '.json': 'application/json',
     '.png': 'image/png',
     '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
     '.gif': 'image/gif',
-    '.svg': 'image/svg+xml'
+    '.svg': 'image/svg+xml',
+    '.ico': 'image/x-icon',
+    '.webp': 'image/webp',
+    '.tif': 'image/tiff',
+    '.tiff': 'image/tiff',
+    '.pdf': 'application/pdf',
+    '.xml': 'application/xml',
+    '.zip': 'application/zip',
+    '.mp3': 'audio/mpeg',
+    '.mp4': 'video/mp4',
+    '.webm': 'video/webm',
+    '.wav': 'audio/wav',
+    '.ttf': 'font/ttf',
+    '.otf': 'font/otf',
+    '.woff': 'font/woff',
+    '.woff2': 'font/woff2',
+    '.csv': 'text/csv',
+    '.txt': 'text/plain',
+    '.md': 'text/markdown',
+    '.wasm': 'application/wasm'
 };
 
 const server = http.createServer((req, res) => {

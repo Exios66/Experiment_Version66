@@ -62,8 +62,44 @@
     <!-- PsychoJS library -->
     <script src="./lib/psychojs-2021.2.3.js" defer></script>
     
+    <!-- PsychoJS compatibility wrapper -->
+    <script>
+      // Ensure PsychoJS global object is properly initialized
+      window.addEventListener('DOMContentLoaded', function() {
+        // Safety check
+        if (typeof window.psychoJS === 'undefined') {
+          console.error('PsychoJS library failed to initialize');
+          document.getElementById('root').innerHTML = '<div style="color: red; margin: 20px; font-family: sans-serif;">' +
+            '<h1>Error Loading PsychoJS</h1>' +
+            '<p>The experiment library could not be loaded.</p>' +
+            '<p>Please try refreshing the page or check your internet connection.</p>' +
+            '</div>';
+        } else {
+          console.log('PsychoJS library initialized successfully');
+        }
+      });
+    </script>
+    
     <!-- Main experiment - must be a module -->
     <script type="module" src="./extended_session_experiment.js"></script>
+    
+    <!-- Fallback for browsers that don't support modules -->
+    <script nomodule>
+      // Create a script element for non-module version
+      document.addEventListener('DOMContentLoaded', function() {
+        console.log('Loading non-module version for browser compatibility');
+        var script = document.createElement('script');
+        script.src = './extended_session_experiment-no-modules.js';
+        script.onerror = function() {
+          document.getElementById('root').innerHTML = '<div style="color: red; margin: 20px; font-family: sans-serif;">' +
+            '<h1>Error Loading Experiment</h1>' +
+            '<p>The experiment script could not be loaded.</p>' +
+            '<p>Please try using a modern browser like Chrome, Firefox, or Edge.</p>' +
+            '</div>';
+        };
+        document.body.appendChild(script);
+      });
+    </script>
     
     <!-- Legacy browsers support -->
     <script nomodule src="./extended_session_experiment-legacy-browsers.js"></script>
