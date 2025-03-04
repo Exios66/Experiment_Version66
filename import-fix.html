@@ -56,6 +56,69 @@
         overflow-y: auto;
         z-index: 999;
       }
+      
+      /* User interface styles */
+      #experiment-ui {
+        text-align: center;
+        padding: 50px 20px;
+        max-width: 800px;
+        margin: 0 auto;
+      }
+      .input-group {
+        margin-bottom: 20px;
+      }
+      .input-group label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+      }
+      .input-group input {
+        padding: 10px;
+        width: 100%;
+        max-width: 300px;
+        border-radius: 4px;
+        border: 1px solid #ddd;
+      }
+      .btn {
+        background-color: #4CAF50;
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        font-size: 16px;
+        cursor: pointer;
+        border-radius: 4px;
+        margin: 5px;
+      }
+      .btn:hover {
+        background-color: #45a049;
+      }
+      .btn-secondary {
+        background-color: #2196F3;
+      }
+      .btn-secondary:hover {
+        background-color: #0b7dda;
+      }
+      .btn-danger {
+        background-color: #f44336;
+      }
+      .btn-danger:hover {
+        background-color: #d32f2f;
+      }
+      #calibration-container {
+        display: none;
+        margin-top: 20px;
+      }
+      #experiment-container {
+        display: none;
+        margin-top: 20px;
+      }
+      .webgazer-video-container {
+        margin: 0 auto;
+        width: 640px;
+        height: 480px;
+        position: relative;
+        border: 2px solid #555;
+      }
     </style>
     
     <!-- Debug and error handling -->
@@ -205,6 +268,7 @@
         addDebugMessage('Loading PsychoJS library');
         var script = document.createElement('script');
         script.src = './lib/psychojs-2021.2.3.js';
+        script.type = 'module'; // Add type="module" to handle ES6 export syntax
         script.onload = function() {
           addDebugMessage('PsychoJS library loaded successfully');
         };
@@ -217,6 +281,37 @@
       
       // Load PsychoJS
       loadPsychoJS();
+    </script>
+    
+    <!-- Module interoperability helper -->
+    <script type="module">
+      // This script helps ensure that PsychoJS loaded as a module is properly exposed globally
+      window.addEventListener('load', function() {
+        addDebugMessage('Checking module interoperability');
+        // Add a small delay to ensure modules have loaded
+        setTimeout(function() {
+          if (typeof psychoJS === 'undefined' || !psychoJS.core || !psychoJS.core.PsychoJS) {
+            addDebugMessage('WARNING: PsychoJS module not properly initialized in global scope');
+            // Try to extract from modules if available
+            import('./lib/psychojs-2021.2.3.js')
+              .then(module => {
+                addDebugMessage('Successfully imported PsychoJS as module');
+                // Make core classes available globally if needed
+                if (module.core && module.core.PsychoJS) {
+                  window.psychoJS = window.psychoJS || {};
+                  window.psychoJS.core = window.psychoJS.core || {};
+                  window.psychoJS.core.PsychoJS = module.core.PsychoJS;
+                  addDebugMessage('PsychoJS module exposed to global scope');
+                }
+              })
+              .catch(err => {
+                addDebugMessage('ERROR: Failed to import PsychoJS as module: ' + err.message);
+              });
+          } else {
+            addDebugMessage('PsychoJS already available in global scope');
+          }
+        }, 500);
+      });
     </script>
     
     <!-- Load WebGazer -->
@@ -257,6 +352,8 @@
           addDebugMessage('Loading experiment script');
           var script = document.createElement('script');
           script.src = './extended_session_experiment-no-modules.js';
+          // Make script type="module" to match PsychoJS loading method
+          script.type = 'module';
           script.onload = function() {
             addDebugMessage('Experiment script loaded successfully');
             
