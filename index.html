@@ -145,29 +145,14 @@
       // Store the original window.createjs
       window.originalCreateJS = window.createjs;
       
-      // Prevent createjs from being defined until we can patch it
-      Object.defineProperty(window, 'createjs', {
-        configurable: true,
-        set: function(value) {
-          // Store the real createjs
-          window.originalCreateJS = value;
-          
-          // Instead of setting window.createjs directly, we'll patch it first
-          setTimeout(function() {
-            addDebugMessage('Intercepted CreateJS initialization');
-            patchCreateJS(value);
-          }, 0);
-        },
-        get: function() {
-          return window.originalCreateJS;
-        }
-      });
-      
       // Function to patch CreateJS when it's loaded
       function patchCreateJS(createjsObj) {
-        if (!createjsObj) return;
+        if (!createjsObj || window.createjsPatched) return;
         
         addDebugMessage('Patching CreateJS/PreloadJS');
+        
+        // Prevent infinite recursion by marking as patched
+        window.createjsPatched = true;
         
         // Make sure LoadQueue exists
         if (createjsObj.LoadQueue) {
@@ -209,7 +194,7 @@
                   }
                 };
                 
-                // Append to the document directly (bypass PreloadJS's appendToHead)
+                // Directly append to document to bypass PreloadJS's appendToHead
                 document.head.appendChild(script);
                 return true;
               }
@@ -218,18 +203,17 @@
               return originalLoadJavascript.call(this, item);
             };
             
-            // Find the internal appendToHead function in the PreloadJS machinery
-            // This is harder because it's minified, but we can search all properties
+            // Search for the appendToHead method in createjs's objects and replace it
             for (const prop in createjsObj) {
               if (typeof createjsObj[prop] === 'object' && createjsObj[prop] !== null) {
                 if (typeof createjsObj[prop].appendToHead === 'function') {
                   addDebugMessage(`Found appendToHead in createjs.${prop}`);
                   
-                  // Store the original function - IMPORTANT: save a reference to the actual implementation
-                  const originalAppendToHead = createjsObj[prop].appendToHead;
-                  window.createjsProxyHandler.appendToHead = originalAppendToHead;
+                  // Get direct reference to the actual function object to prevent chain issues
+                  const origAppendFn = createjsObj[prop].appendToHead;
                   
-                  // Replace with our version
+                  // Create a completely new function to avoid any shared prototype/context issues
+                  // This ensures no recursive calls can happen
                   createjsObj[prop].appendToHead = function(parent, elem, before) {
                     // Check if this is a script being appended
                     if (elem && elem.tagName === 'SCRIPT') {
@@ -237,27 +221,34 @@
                       
                       // If it's a module script that doesn't have type="module"
                       if (window.isModuleScript(src) && elem.type !== 'module') {
-                        addDebugMessage(`Intercepted script append for module: ${src}`);
+                        addDebugMessage(`Processing module script: ${src}`);
                         
-                        // Create a new script element with type="module"
+                        // Rather than modifying the element, directly add it to document ourselves
                         const moduleScript = document.createElement('script');
                         moduleScript.type = 'module';
                         moduleScript.src = elem.src;
-                        moduleScript.async = elem.async;
-                        moduleScript.defer = elem.defer;
                         
                         // Copy event handlers
                         if (elem.onload) moduleScript.onload = elem.onload;
                         if (elem.onerror) moduleScript.onerror = elem.onerror;
                         
-                        // Replace the original element with our module script
-                        elem = moduleScript;
+                        // Add to document directly
+                        document.head.appendChild(moduleScript);
+                        
+                        // Return immediately to prevent appendToHead from running
+                        return;
                       }
                     }
                     
-                    // Call the ORIGINAL function with our potentially modified element
-                    // NOT the patched version - this is what was causing the infinite recursion
-                    return originalAppendToHead.call(this, parent, elem, before);
+                    // Fall back to native DOM for direct appendChild to prevent further patching issues
+                    if (parent && elem) {
+                      if (before) {
+                        parent.insertBefore(elem, before);
+                      } else {
+                        parent.appendChild(elem);
+                      }
+                      return;
+                    }
                   };
                   
                   break;
@@ -265,18 +256,38 @@
               }
             }
             
-            // Make sure we're using the patched version
-            window.createjs = createjsObj;
             addDebugMessage('CreateJS patched successfully');
           } catch (error) {
             console.error('Error patching CreateJS:', error);
             addDebugMessage(`ERROR patching CreateJS: ${error.message}`);
-            
-            // Restore original to prevent completely breaking the library
-            window.createjs = createjsObj;
           }
         }
       }
+      
+      // Set up to intercept createjs when it's assigned
+      Object.defineProperty(window, 'createjs', {
+        configurable: true,
+        set: function(value) {
+          // Store the real createjs
+          window.originalCreateJS = value;
+          
+          // Patch it before making it available
+          setTimeout(function() {
+            addDebugMessage('Intercepted CreateJS initialization');
+            patchCreateJS(value);
+          }, 0);
+          
+          // Update the property without triggering the setter
+          Object.defineProperty(window, 'createjs', {
+            configurable: true,
+            writable: true,
+            value: value
+          });
+        },
+        get: function() {
+          return window.originalCreateJS;
+        }
+      });
     </script>
     
     <!-- Now load PreloadJS -->

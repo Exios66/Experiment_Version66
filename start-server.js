@@ -6,6 +6,12 @@ const url = require('url');
 // Allow port to be configured through environment or command line
 const PORT = process.env.PORT || 8080;
 
+// Known test pages that should be directly accessible
+const knownTestPages = [
+    '/webgazer-test.html',
+    '/resource-test.html'
+];
+
 // MIME types for different file extensions
 const mimeTypes = {
     '.html': 'text/html',
@@ -96,8 +102,14 @@ const server = http.createServer((req, res) => {
     let pathname = `.${parsedUrl.pathname}`;
     
     // Default to index.html if the path is '/' or in SPA paths
-    if (pathname === './' || spaPaths.includes(parsedUrl.pathname)) {
+    if (pathname === './') {
         console.log('Serving index.html as default page');
+        pathname = './index.html';
+    } else if (knownTestPages.includes(parsedUrl.pathname)) {
+        console.log(`Serving test page: ${parsedUrl.pathname}`);
+        // pathname already has the correct value, no need to change
+    } else if (spaPaths.includes(parsedUrl.pathname)) {
+        console.log('Serving index.html for SPA route');
         pathname = './index.html';
     }
     
@@ -263,7 +275,9 @@ function startServer(port) {
     server.listen(port, () => {
         console.log(`Server running at http://localhost:${port}/`);
         console.log(`You can access the experiment at http://localhost:${port}/`);
-        console.log(`You can test resources at http://localhost:${port}/resource-test.html`);
+        console.log(`Available test pages:`);
+        console.log(`- WebGazer test: http://localhost:${port}/webgazer-test.html`);
+        console.log(`- Resource test: http://localhost:${port}/resource-test.html`);
         console.log(`Press Ctrl+C to stop the server`);
     });
 }
