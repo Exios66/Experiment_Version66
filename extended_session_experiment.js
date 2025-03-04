@@ -127,6 +127,9 @@ async function experimentInit() {
   initializeEyetrackingClock = new util.Clock();
   //initialize params of the webgazer package (used for eye tracking)
   
+  // Initialize global array to store all gaze data points
+  window.allGazeData = [];
+  
   // Initialize x and y arrays; we use these to calculate running averages of 
   // current gaze position; the longer the window, the slower, but more fluent
   // the updates
@@ -512,6 +515,15 @@ function initializeEyetrackingRoutineEnd() {
         thisComponent.setAutoDraw(false);
       }
     }
+    
+    // Start gaze data logging now that eye tracking is initialized
+    if (window.webgazer && typeof startGazeLogging === 'function') {
+      console.log('Starting gaze logging after eye tracking initialization');
+      startGazeLogging();
+    } else {
+      console.warn('Could not start gaze logging - WebGazer not initialized or startGazeLogging not available');
+    }
+    
     // the Routine "initializeEyetracking" was not non-slip safe, so reset the non-slip timer
     routineTimer.reset();
     
@@ -1605,8 +1617,44 @@ async function quitPsychoJS(message, isCompleted) {
         // Add data to PsychoJS experiment
         psychoJS.experiment.addData('gazeData', JSON.stringify(gazeData));
       } else {
-        // If getStoredPoints is not available, log a warning
-        console.warn('WebGazer getStoredPoints method not available - skipping gaze data export');
+        // If getStoredPoints is not available, use our fallback data
+        console.warn('WebGazer getStoredPoints method not available - using fallback gaze data');
+        
+        if (window.allGazeData && window.allGazeData.length > 0) {
+          // Export fallback collected gaze data
+          const fallbackGazeData = {
+            timestamps: window.allGazeData.map(p => p.timestamp),
+            xPositions: window.allGazeData.map(p => p.x),
+            yPositions: window.allGazeData.map(p => p.y),
+            count: window.allGazeData.length
+          };
+          
+          console.log(`Saving fallback gaze data (${window.allGazeData.length} points)...`);
+          
+          // Add fallback data to PsychoJS experiment
+          psychoJS.experiment.addData('fallbackGazeData', JSON.stringify(fallbackGazeData));
+          
+          // Also try to save to a downloadable file if possible
+          try {
+            const csvContent = "data:text/csv;charset=utf-8," + 
+              "timestamp,x,y\n" + 
+              window.allGazeData.map(p => `${p.timestamp},${p.x},${p.y}`).join("\n");
+            
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "gaze_data_fallback_" + new Date().toISOString() + ".csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            console.log('Fallback gaze data CSV download initiated');
+          } catch (downloadErr) {
+            console.error('Failed to initiate fallback gaze data download:', downloadErr);
+          }
+        } else {
+          console.error('No fallback gaze data available in window.allGazeData');
+        }
       }
       
       // Pause webgazer
@@ -1616,6 +1664,41 @@ async function quitPsychoJS(message, isCompleted) {
       
     } catch (err) {
       console.error('Error saving WebGazer data:', err);
+      
+      // Try to save fallback data if primary method failed
+      if (window.allGazeData && window.allGazeData.length > 0) {
+        try {
+          console.log(`Attempting to save fallback gaze data after error (${window.allGazeData.length} points)...`);
+          
+          // Create a simplified data structure
+          const fallbackGazeData = {
+            timestamps: window.allGazeData.map(p => p.timestamp),
+            xPositions: window.allGazeData.map(p => p.x),
+            yPositions: window.allGazeData.map(p => p.y),
+            count: window.allGazeData.length
+          };
+          
+          // Add fallback data to PsychoJS experiment
+          psychoJS.experiment.addData('fallbackGazeData', JSON.stringify(fallbackGazeData));
+          
+          // Also try to save to a downloadable file
+          const csvContent = "data:text/csv;charset=utf-8," + 
+            "timestamp,x,y\n" + 
+            window.allGazeData.map(p => `${p.timestamp},${p.x},${p.y}`).join("\n");
+          
+          const encodedUri = encodeURI(csvContent);
+          const link = document.createElement("a");
+          link.setAttribute("href", encodedUri);
+          link.setAttribute("download", "gaze_data_fallback_" + new Date().toISOString() + ".csv");
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          
+          console.log('Fallback gaze data CSV download initiated after error');
+        } catch (fallbackErr) {
+          console.error('Failed to save fallback gaze data after error:', fallbackErr);
+        }
+      }
     }
   }
   
