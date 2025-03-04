@@ -22,7 +22,7 @@ const requiredFiles = [
     './extended_session_experiment-no-modules.js',
     './lib/psychojs-2021.2.3.js',
     './webgazer-2.0.1.js',
-    './calibration_trials.xlsx'
+    './calibration_trials.csv'
 ];
 
 console.log('🔍 Checking for required files...');
@@ -48,7 +48,8 @@ const mimeTypes = {
     '.jpg': 'image/jpeg',
     '.gif': 'image/gif',
     '.svg': 'image/svg+xml',
-    '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    '.csv': 'text/csv'
 };
 
 // Create server

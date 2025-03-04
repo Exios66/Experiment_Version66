@@ -35,6 +35,7 @@ const mimeTypes = {
     '.mp3': 'audio/mpeg',
     '.map': 'application/json', // Source maps
     '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    '.csv': 'text/csv',
 };
 
 // List of files that should always return the index.html for SPA-like behavior
