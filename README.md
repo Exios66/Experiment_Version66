@@ -1,98 +1,90 @@
-# Eye Tracking Experiment
+# Experiment Version 66
 
-A PsychoJS experiment for eye tracking using WebGazer.js.
+An eye-tracking experiment using WebGazer.js and PsychoJS.
 
 ## Overview
 
-This experiment demonstrates eye tracking capabilities in a web browser using the WebGazer.js library integrated with PsychoJS. It includes calibration routines and a simple interactive demo of eye tracking functionality.
+This project implements a web-based eye-tracking experiment using WebGazer.js for eye tracking functionality and PsychoJS for experiment control and data collection. The experiment includes calibration routines, gaze tracking visualization, and data collection capabilities.
 
-## Files and Structure
+## Project Structure
 
-The experiment consists of the following main files:
+The project has been reorganized into a more modular and maintainable structure:
 
-- `index.html` - The entry point for the experiment
-- `extended_session_experiment.js` - The main experiment script
-- `webgazer-2.0.1.js` - The WebGazer eye tracking library
-- `webgazer-2.0.1.tp.js` - A symbolic link to the WebGazer library (for compatibility)
-- `calibration_trials.xlsx` - Calibration data for the experiment
-- `lib/` - Directory containing PsychoJS library files
+```
+/src
+  /js          - Core JavaScript experiment files
+  /lib         - External libraries (WebGazer, PsychoJS)
+  /modules     - ES module wrapper files
+  /data        - Experiment data files
+  /tests       - Testing utilities and diagnostic pages
+  /css         - Stylesheets (placeholder for future use)
+  server.js    - Enhanced Node.js server
+  index.html   - Main experiment entry point
+/start.js      - Startup script
+```
 
-## Setup Instructions
+## Getting Started
 
-### Running Locally
+1. Make sure you have Node.js installed on your system
+2. Clone or download this repository
+3. Start the server:
 
-1. Ensure all files are present in the correct locations
-2. Start a local web server:
+```bash
+node start.js
+```
 
-   ```bash
-   python -m http.server 8000
-   ```
+4. Access the experiment at http://localhost:8080 (or another port if 8080 is in use)
 
-3. Open a browser and navigate to `http://localhost:8000`
+## Available Test Pages
 
-### Running on Pavlovia
+- WebGazer Test: http://localhost:8080/tests/webgazer-test.html
+- Resource Test: http://localhost:8080/tests/resource-test.html
 
-1. Upload all files to your Pavlovia repository
-2. Ensure the file structure matches the local setup
-3. Check that WebGazer files are correctly uploaded
-4. Follow standard Pavlovia deployment procedures
+## Features
 
-## Common Issues and Troubleshooting
+- **Eye Tracking**: Uses WebGazer.js to track eye movements via webcam
+- **Calibration**: Calibration routines to ensure accurate gaze tracking
+- **Data Collection**: Collection and storage of gaze data for analysis
+- **Debugging Tools**: Built-in debugging panel and error reporting
+- **Module Support**: ES module compatibility with fallback options
 
-### 404 Errors
+## Technical Details
 
-If you see 404 errors in the console:
+### Server
 
-1. Check that all files are present in the correct locations
-2. Verify that `webgazer-2.0.1.js` is accessible
-3. Ensure paths in `index.html` match your file structure
+The custom Node.js server provides:
+- Automatic routing for reorganized file structure
+- Proper MIME type handling for all file types
+- Module detection and appropriate headers
+- Error handling and source map support
+- Port selection fallback if default port is in use
 
-### WebGazer Initialization Issues
+### Module System
 
-If the webcam doesn't initialize:
+The experiment supports ES modules with:
+- Automatic module detection
+- Module wrapper for compatibility
+- Fallback to non-module version when needed
 
-1. Make sure you're using a secure context (HTTPS or localhost)
-2. Grant camera permissions when prompted
-3. Check browser console for specific error messages
+### Browser Requirements
 
-### Path Issues
+- Modern web browser (Chrome, Firefox, Edge recommended)
+- Webcam access for eye tracking functionality
+- JavaScript enabled
 
-If resources don't load correctly:
+## Troubleshooting
 
-1. Check that all paths in `index.html` and `extended_session_experiment.js` are correct
-2. Verify that symbolic links are working properly
-3. Ensure no files are missing or misnamed
+If you encounter issues:
 
-## Browser Compatibility
-
-This experiment works best in:
-
-- Chrome (latest version)
-- Firefox (latest version)
-- Edge (latest version)
-
-Safari has known issues with WebGazer and may not function correctly.
-
-## Camera Requirements
-
-- A functional webcam is required
-- Camera permissions must be granted
-- Good, consistent lighting is recommended for best results
-
-## Data Collection
-
-Eye tracking data is collected throughout the experiment. The data includes:
-
-- Eye positions (x, y coordinates)
-- Timestamps
-- Calibration accuracy
+1. Check browser console for error messages
+2. Use the debug panel (toggle button in the bottom-right corner)
+3. Verify webcam permissions are granted
+4. Ensure all files are properly located in their respective directories
 
 ## License
 
-This project is licensed under the terms included in the LICENSE file.
+See LICENSE file for details.
 
-## Acknowledgments
+## Changelog
 
-- WebGazer.js library developed by Brown University
-- PsychoJS framework developed by PsychoPy
-- Additional modifications by Thomas Pronk
+See CHANGELOG.md for detailed list of changes and improvements.

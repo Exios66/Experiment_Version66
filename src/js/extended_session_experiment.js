@@ -143,6 +143,8 @@ async function experimentInit() {
   window.lastExportTime = Date.now();
   window.eyesReturnedDelay = 1000; // 1 second delay before hiding webcam thumbnail
   window.eyesExitedTimestamp = Date.now();
+  window.gazeExportTimer = null; // Initialize timer reference for cleanup
+  window.exportFunctionActive = true; // Flag to control export function
   
   // Initialize storage for calibration data
   window.calibrationPoints = [];
@@ -745,81 +747,6 @@ function calibrationIntroRoutineEachFrame() {
 }
 
 
-function trackingTrialRoutineEachFrame() {
-  return async function () {
-    //------Loop for each frame of Routine 'trackingTrial'-------
-    // get current time
-    t = trackingTrialClock.getTime();
-    frameN = frameN + 1;// number of completed frames (so 0 is the first frame)
-    // update/draw components on each frame
-    
-    // *tracking_square* updates
-    if (t >= 0.0 && tracking_square.status === PsychoJS.Status.NOT_STARTED) {
-      // keep track of start time/frame for later
-      tracking_square.tStart = t;  // (not accounting for frame time here)
-      tracking_square.frameNStart = frameN;  // exact frame index
-      
-      tracking_square.setAutoDraw(true);
-    }
-
-    // *trackingTxt* updates
-    if (t >= 0.0 && trackingTxt.status === PsychoJS.Status.NOT_STARTED) {
-      // keep track of start time/frame for later
-      trackingTxt.tStart = t;  // (not accounting for frame time here)
-      trackingTxt.frameNStart = frameN;  // exact frame index
-      
-      trackingTxt.setAutoDraw(true);
-    }
-
-    // *tracking_resp* updates
-    if (t >= 0.0 && tracking_resp.status === PsychoJS.Status.NOT_STARTED) {
-      // keep track of start time/frame for later
-      tracking_resp.tStart = t;  // (not accounting for frame time here)
-      tracking_resp.frameNStart = frameN;  // exact frame index
-      
-      // keyboard checking is just starting
-      psychoJS.window.callOnFlip(function() { tracking_resp.clock.reset(); });  // t=0 on next screen flip
-      psychoJS.window.callOnFlip(function() { tracking_resp.start(); }); // start on screen flip
-      psychoJS.window.callOnFlip(function() { tracking_resp.clearEvents(); });
-    }
-
-    if (tracking_resp.status === PsychoJS.Status.STARTED) {
-      let theseKeys = tracking_resp.getKeys({keyList: ['space'], waitRelease: false});
-      if (theseKeys.length > 0) {
-        tracking_resp.keys = theseKeys[0].name;  // just the first key pressed
-        tracking_resp.rt = theseKeys[0].rt;
-        // a response ends the routine
-        continueRoutine = false;
-      }
-    }
-    
-    // check for quit (typically the Esc key)
-    if (psychoJS.experiment.experimentEnded || psychoJS.eventManager.getKeys({keyList:['escape']}).length > 0) {
-      return quitPsychoJS('The [Escape] key was pressed. Goodbye!', false);
-    }
-    
-    // check if the Routine should terminate
-    if (!continueRoutine) {  // a component has requested a forced-end of Routine
-      return Scheduler.Event.NEXT;
-    }
-    
-    continueRoutine = false;  // reverts to True if at least one component still running
-    for (const thisComponent of trackingTrialComponents)
-      if ('status' in thisComponent && thisComponent.status !== PsychoJS.Status.FINISHED) {
-        continueRoutine = true;
-        break;
-      }
-    
-    // refresh the screen if continuing
-    if (continueRoutine) {
-      return Scheduler.Event.FLIP_REPEAT;
-    } else {
-      return Scheduler.Event.NEXT;
-    }
-  };
-}
-
-
 function trackingTrialRoutineEnd() {
   return async function () {
     //------Ending Routine 'trackingTrial'-------
@@ -5099,3 +5026,2023 @@ function initializeEyetrackingRoutineBegin(snapshot) {
               y: data.y,
               eyeFeatures: data.eyeFeatures || null,
               trialIndex: psychoJS.experiment.thisN || -1,
+              trialPhase: psychoJS.experiment.currentScheduler?.taskName || 'unknown'
+            });
+            
+            // Export if buffer gets too large or time interval has passed
+            if (window.gazeDataBuffer.length > 100 || 
+                (Date.now() - window.lastExportTime) > window.gazeExportInterval) {
+              exportGazeData();
+            }
+          }
+        })
+        .begin();
+    
+    // keep track of which components have finished
+    initializeEyetrackingComponents = [];
+    initializeEyetrackingComponents.push(webcamWarning);
+    
+    for (const thisComponent of initializeEyetrackingComponents)
+      if ('status' in thisComponent)
+        thisComponent.status = PsychoJS.Status.NOT_STARTED;
+    return Scheduler.Event.NEXT;
+  }
+}
+
+
+function initializeEyetrackingRoutineEachFrame() {
+  return async function () {
+    //------Loop for each frame of Routine 'initializeEyetracking'-------
+    // get current time
+    t = initializeEyetrackingClock.getTime();
+    frameN = frameN + 1;// number of completed frames (so 0 is the first frame)
+    // update/draw components on each frame
+    // Finish routine once everything is ready
+    continueRoutine = 
+      !window.webgazer.isReady() || 
+      document.getElementById('webgazerFaceFeedbackBox') === null ||
+      document.getElementById('webgazerVideoFeed') === null;
+    
+    // *webcamWarning* updates
+    if (t >= 0.0 && webcamWarning.status === PsychoJS.Status.NOT_STARTED) {
+      // keep track of start time/frame for later
+      webcamWarning.tStart = t;  // (not accounting for frame time here)
+      webcamWarning.frameNStart = frameN;  // exact frame index
+      
+      webcamWarning.setAutoDraw(true);
+    }
+
+    // check for quit (typically the Esc key)
+    if (psychoJS.experiment.experimentEnded || psychoJS.eventManager.getKeys({keyList:['escape']}).length > 0) {
+      return quitPsychoJS('The [Escape] key was pressed. Goodbye!', false);
+    }
+    
+    // check if the Routine should terminate
+    if (!continueRoutine) {  // a component has requested a forced-end of Routine
+      return Scheduler.Event.NEXT;
+    }
+    
+    continueRoutine = false;  // reverts to True if at least one component still running
+    for (const thisComponent of initializeEyetrackingComponents)
+      if ('status' in thisComponent && thisComponent.status !== PsychoJS.Status.FINISHED) {
+        continueRoutine = true;
+        break;
+      }
+    
+    // refresh the screen if continuing
+    if (continueRoutine) {
+      return Scheduler.Event.FLIP_REPEAT;
+    } else {
+      return Scheduler.Event.NEXT;
+    }
+  };
+}
+
+
+function initializeEyetrackingRoutineEnd() {
+  return async function () {
+    //------Ending Routine 'initializeEyetracking'-------
+    for (const thisComponent of initializeEyetrackingComponents) {
+      if (typeof thisComponent.setAutoDraw === 'function') {
+        thisComponent.setAutoDraw(false);
+      }
+    }
+    
+    // Start gaze data logging now that eye tracking is initialized
+    if (window.webgazer && typeof startGazeLogging === 'function') {
+      console.log('Starting gaze logging after eye tracking initialization');
+      startGazeLogging();
+    } else {
+      console.warn('Could not start gaze logging - WebGazer not initialized or startGazeLogging not available');
+    }
+    
+    // the Routine "initializeEyetracking" was not non-slip safe, so reset the non-slip timer
+    routineTimer.reset();
+    
+    return Scheduler.Event.NEXT;
+  };
+}
+
+
+var _inst1_resp_allKeys;
+var inst1Components;
+function inst1RoutineBegin(snapshot) {
+  return async function () {
+    TrialHandler.fromSnapshot(snapshot); // ensure that .thisN vals are up to date
+    
+    //------Prepare to start Routine 'inst1'-------
+    t = 0;
+    inst1Clock.reset(); // clock
+    frameN = -1;
+    continueRoutine = true; // until we're told otherwise
+    // update component parameters for each repeat
+    document.getElementById('webgazerFaceFeedbackBox').style.display = 'none';
+    document.getElementById('webgazerVideoFeed').style.display = 'none';
+    inst1_resp.keys = undefined;
+    inst1_resp.rt = undefined;
+    _inst1_resp_allKeys = [];
+    // keep track of which components have finished
+    inst1Components = [];
+    inst1Components.push(instruction1Txt);
+    inst1Components.push(inst1_resp);
+    
+    for (const thisComponent of inst1Components)
+      if ('status' in thisComponent)
+        thisComponent.status = PsychoJS.Status.NOT_STARTED;
+    return Scheduler.Event.NEXT;
+  }
+}
+
+
+function inst1RoutineEachFrame() {
+  return async function () {
+    //------Loop for each frame of Routine 'inst1'-------
+    // get current time
+    t = inst1Clock.getTime();
+    frameN = frameN + 1;// number of completed frames (so 0 is the first frame)
+    // update/draw components on each frame
+    
+    // *instruction1Txt* updates
+    if (t >= 0.0 && instruction1Txt.status === PsychoJS.Status.NOT_STARTED) {
+      // keep track of start time/frame for later
+      instruction1Txt.tStart = t;  // (not accounting for frame time here)
+      instruction1Txt.frameNStart = frameN;  // exact frame index
+      
+      instruction1Txt.setAutoDraw(true);
+    }
+
+    
+    // *inst1_resp* updates
+    if (t >= 0.0 && inst1_resp.status === PsychoJS.Status.NOT_STARTED) {
+      // keep track of start time/frame for later
+      inst1_resp.tStart = t;  // (not accounting for frame time here)
+      inst1_resp.frameNStart = frameN;  // exact frame index
+      
+      // keyboard checking is just starting
+      psychoJS.window.callOnFlip(function() { inst1_resp.clock.reset(); });  // t=0 on next screen flip
+      psychoJS.window.callOnFlip(function() { inst1_resp.start(); }); // start on screen flip
+      psychoJS.window.callOnFlip(function() { inst1_resp.clearEvents(); });
+    }
+
+    if (inst1_resp.status === PsychoJS.Status.STARTED) {
+      let theseKeys = inst1_resp.getKeys({keyList: ['space'], waitRelease: false});
+      _inst1_resp_allKeys = _inst1_resp_allKeys.concat(theseKeys);
+      if (_inst1_resp_allKeys.length > 0) {
+        inst1_resp.keys = _inst1_resp_allKeys[_inst1_resp_allKeys.length - 1].name;  // just the last key pressed
+        inst1_resp.rt = _inst1_resp_allKeys[_inst1_resp_allKeys.length - 1].rt;
+        // a response ends the routine
+        continueRoutine = false;
+      }
+    }
+    
+    // check for quit (typically the Esc key)
+    if (psychoJS.experiment.experimentEnded || psychoJS.eventManager.getKeys({keyList:['escape']}).length > 0) {
+      return quitPsychoJS('The [Escape] key was pressed. Goodbye!', false);
+    }
+    
+    // check if the Routine should terminate
+    if (!continueRoutine) {  // a component has requested a forced-end of Routine
+      return Scheduler.Event.NEXT;
+    }
+    
+    continueRoutine = false;  // reverts to True if at least one component still running
+    for (const thisComponent of inst1Components)
+      if ('status' in thisComponent && thisComponent.status !== PsychoJS.Status.FINISHED) {
+        continueRoutine = true;
+        break;
+      }
+    
+    // refresh the screen if continuing
+    if (continueRoutine) {
+      return Scheduler.Event.FLIP_REPEAT;
+    } else {
+      return Scheduler.Event.NEXT;
+    }
+  };
+}
+
+
+function inst1RoutineEnd() {
+  return async function () {
+    //------Ending Routine 'inst1'-------
+    for (const thisComponent of inst1Components) {
+      if (typeof thisComponent.setAutoDraw === 'function') {
+        thisComponent.setAutoDraw(false);
+      }
+    }
+    psychoJS.experiment.addData('inst1_resp.keys', inst1_resp.keys);
+    if (typeof inst1_resp.keys !== 'undefined') {  // we had a response
+        psychoJS.experiment.addData('inst1_resp.rt', inst1_resp.rt);
+        routineTimer.reset();
+        }
+    
+    inst1_resp.stop();
+    // the Routine "inst1" was not non-slip safe, so reset the non-slip timer
+    routineTimer.reset();
+    
+    return Scheduler.Event.NEXT;
+  };
+}
+
+
+var gotValidClick;
+var calibrationIntroComponents;
+function calibrationIntroRoutineBegin(snapshot) {
+  return async function () {
+    TrialHandler.fromSnapshot(snapshot); // ensure that .thisN vals are up to date
+    
+    //------Prepare to start Routine 'calibrationIntro'-------
+    t = 0;
+    calibrationIntroClock.reset(); // clock
+    frameN = -1;
+    continueRoutine = true; // until we're told otherwise
+    // update component parameters for each repeat
+    // setup some python lists for storing info about the calibrationMouse
+    gotValidClick = false; // until a click is received
+    // keep track of which components have finished
+    calibrationIntroComponents = [];
+    calibrationIntroComponents.push(calibrationTxt);
+    calibrationIntroComponents.push(calibrationMouse);
+    
+    for (const thisComponent of calibrationIntroComponents)
+      if ('status' in thisComponent)
+        thisComponent.status = PsychoJS.Status.NOT_STARTED;
+    return Scheduler.Event.NEXT;
+  }
+}
+
+
+var prevButtonState;
+var _mouseButtons;
+function calibrationIntroRoutineEachFrame() {
+  return async function () {
+    //------Loop for each frame of Routine 'calibrationIntro'-------
+    // get current time
+    t = calibrationIntroClock.getTime();
+    frameN = frameN + 1;// number of completed frames (so 0 is the first frame)
+    // update/draw components on each frame
+    
+    // *calibrationTxt* updates
+    if (t >= 0.0 && calibrationTxt.status === PsychoJS.Status.NOT_STARTED) {
+      // keep track of start time/frame for later
+      calibrationTxt.tStart = t;  // (not accounting for frame time here)
+      calibrationTxt.frameNStart = frameN;  // exact frame index
+      
+      calibrationTxt.setAutoDraw(true);
+    }
+
+    // *calibrationMouse* updates
+    if (t >= 0.0 && calibrationMouse.status === PsychoJS.Status.NOT_STARTED) {
+      // keep track of start time/frame for later
+      calibrationMouse.tStart = t;  // (not accounting for frame time here)
+      calibrationMouse.frameNStart = frameN;  // exact frame index
+      
+      calibrationMouse.status = PsychoJS.Status.STARTED;
+      calibrationMouse.mouseClock.reset();
+      prevButtonState = calibrationMouse.getPressed();  // if button is down already this ISN'T a new click
+    }
+    
+    // Initialize tracking_square
+    tracking_square = new visual.Rect({
+      win: psychoJS.window,
+      name: 'tracking_square',
+      width: 0.05,
+      height: 0.05,
+      fillColor: new util.Color('white'),
+      opacity: undefined, 
+      depth: 0, 
+      interpolate: true
+    });
+    
+    trackingTxt = new visual.TextStim({
+      win: psychoJS.window,
+      name: 'trackingTxt',
+      text: 'Great! we are now tracking your eye movements! look around the screen to see how it works! \n\nPlease remember is important for you to keep your head still during the experiment. \n\nPress space to start',
+      font: 'Arial',
+      units: undefined, 
+      pos: [0, 0], height: 0.05,  wrapWidth: undefined, ori: 0.0,
+      color: new util.Color('white'),  opacity: undefined,
+      depth: -1.0 
+    });
+    
+    tracking_resp = new core.Keyboard({psychoJS: psychoJS, clock: new util.Clock(), waitForStart: true});
+    
+    // keep track of which components have finished
+    const trackingTrialComponents = [tracking_square, trackingTxt, tracking_resp];
+    for (const thisComponent of trackingTrialComponents)
+      if ('status' in thisComponent)
+        thisComponent.status = PsychoJS.Status.NOT_STARTED;
+    return Scheduler.Event.NEXT;
+  }
+}
+
+
+function trackingTrialRoutineEnd() {
+  return async function () {
+    //------Ending Routine 'trackingTrial'-------
+    for (const thisComponent of trackingTrialComponents) {
+      if (typeof thisComponent.setAutoDraw === 'function') {
+        thisComponent.setAutoDraw(false);
+      }
+    }
+    psychoJS.experiment.addData('trackingTrial_resp.keys', tracking_resp.keys);
+    if (typeof tracking_resp.keys !== 'undefined') {  // we had a response
+        psychoJS.experiment.addData('trackingTrial_resp.rt', tracking_resp.rt);
+        routineTimer.reset();
+        }
+    
+    tracking_resp.stop();
+    // the Routine "trackingTrial" was not non-slip safe, so reset the non-slip timer
+    routineTimer.reset();
+    
+    return Scheduler.Event.NEXT;
+  };
+}
+
+
+var t;
+var frameN;
+var continueRoutine;
+var initializeEyetrackingComponents;
+/** 
+ * This function initializes the eye tracking component of the experiment
+ * It has been updated to incorporate a simpler version for compatibility with older experiment versions
+ */
+function initializeEyetrackingRoutineBegin(snapshot) {
+  return async function () {
+    // Ensure TrialHandler is defined
+    if (typeof TrialHandler === 'undefined') {
+      console.error('TrialHandler is not defined. Make sure the main experiment file is loaded first.');
+      return;
+    }
+    
+    TrialHandler.fromSnapshot(snapshot); // ensure that .thisN vals are up to date
+    
+    //------Prepare to start Routine 'initializeEyetracking'-------
+    t = 0;
+    initializeEyetrackingClock.reset(); // clock
+    frameN = -1;
+    continueRoutine = true; // until we're told otherwise
+    
+    // Ensure WebGazer is properly loaded
+    if (typeof window.webgazer === 'undefined') {
+      console.error('WebGazer is not loaded. Attempting to load it again...');
+      try {
+        // Load WebGazer dynamically if it's not available
+        await psychoJS.serverManager.prepareResource('webgazer-2.0.1.js');
+        console.log('WebGazer loaded successfully');
+      } catch (error) {
+        console.error('Failed to load WebGazer:', error);
+      }
+    }
+    
+    // update component parameters for each repeat
+    // Show webcam thumbnail and face feedback box, but not face overlay and gaze dot
+    if (window.webgazer) {
+      window.webgazer.params.showVideoPreview = true;
+      window.webgazer.params.showFaceFeedbackBox = true;
+      window.webgazer.params.showFaceOverlay = false;
+      window.webgazer.params.showGazeDot = false;
+    } else {
+      console.error('WebGazer is still not available after loading attempt');
+    }
+    
+    // Configure data collection
+    const exportGazeData = () => {
+      try {
+        if (window.gazeDataBuffer && window.gazeDataBuffer.length > 0) {
+          // Add current batch of gaze data to experiment data
+          const batchData = {
+            timestamp: Date.now(),
+            sessionId: expInfo.participant + '_' + expInfo.session,
+            frameRate: expInfo.frameRate,
+            gazePoints: window.gazeDataBuffer,
+            bufferSize: window.gazeDataBuffer.length
+          };
+          
+          // Add batch to experiment data with unique identifier
+          const batchKey = 'gazeBatch_' + batchData.timestamp;
+          psychoJS.experiment.addData(batchKey, JSON.stringify(batchData));
+          
+          // Log export details
+          console.log(`Exported gaze data batch at ${new Date(batchData.timestamp).toISOString()}: ${batchData.gazePoints.length} points`);
+          
+          // Clear buffer after successful export
+          window.gazeDataBuffer = [];
+          window.lastExportTime = Date.now();
+          
+          // Record export success in experiment data
+          psychoJS.experiment.addData('gazeExportSuccess', true);
+          psychoJS.experiment.addData('gazeExportTimestamp', batchData.timestamp);
+          psychoJS.experiment.addData('gazeExportSize', batchData.bufferSize);
+        } else {
+          console.log('No gaze data to export at', new Date().toISOString());
+        }
+      } catch (error) {
+        // Handle export errors gracefully
+        console.error('Error exporting gaze data:', error);
+        psychoJS.experiment.addData('gazeExportError', error.message);
+        
+        // Attempt recovery by clearing buffer
+        window.gazeDataBuffer = [];
+        window.lastExportTime = Date.now();
+      }
+    };
+    
+    // Set up periodic export
+    window.gazeExportTimer = setInterval(() => {
+      exportGazeData();
+    }, window.gazeExportInterval);
+    
+    // Start eye tracking with enhanced data collection
+    window.webgazer
+        // Called on each eye tracking update
+        .setGazeListener(function(data, clock) {
+          if (data !== null) {
+            // Remove first element from gazes array, add current gaze at the end
+            window.xGazes.shift();
+            window.xGazes.push(data.x);
+            window.yGazes.shift();
+            window.yGazes.push(data.y);
+            
+            // Store gaze data for export
+            window.gazeDataBuffer.push({
+              timestamp: Date.now(),
+              x: data.x,
+              y: data.y,
+              eyeFeatures: data.eyeFeatures || null,
+              trialIndex: psychoJS.experiment.thisN || -1,
+              trialPhase: psychoJS.experiment.currentScheduler?.taskName || 'unknown'
+            });
+            
+            // Add to master data store for persistence
+            if (!window.masterGazeData) {
+              window.masterGazeData = [];
+            }
+            window.masterGazeData.push({
+              timestamp: Date.now(),
+              x: data.x,
+              y: data.y,
+              eyeFeatures: data.eyeFeatures || null,
+              trialIndex: psychoJS.experiment.thisN || -1,
+              trialPhase: psychoJS.experiment.currentScheduler?.taskName || 'unknown'
+            });
+            
+            // Export if buffer gets too large or time interval has passed
+            if (window.gazeDataBuffer.length > 100 || 
+                (Date.now() - window.lastExportTime) > window.gazeExportInterval) {
+              exportGazeData();
+            }
+          }
+        })
+        .begin();
+    
+    // keep track of which components have finished
+    initializeEyetrackingComponents = [];
+    initializeEyetrackingComponents.push(webcamWarning);
+    
+    for (const thisComponent of initializeEyetrackingComponents)
+      if ('status' in thisComponent)
+        thisComponent.status = PsychoJS.Status.NOT_STARTED;
+    return Scheduler.Event.NEXT;
+  }
+}
+
+
+function initializeEyetrackingRoutineEachFrame() {
+  return async function () {
+    //------Loop for each frame of Routine 'initializeEyetracking'-------
+    // get current time
+    t = initializeEyetrackingClock.getTime();
+    frameN = frameN + 1;// number of completed frames (so 0 is the first frame)
+    // update/draw components on each frame
+    // Finish routine once everything is ready
+    continueRoutine = 
+      !window.webgazer.isReady() || 
+      document.getElementById('webgazerFaceFeedbackBox') === null ||
+      document.getElementById('webgazerVideoFeed') === null;
+    
+    // *webcamWarning* updates
+    if (t >= 0.0 && webcamWarning.status === PsychoJS.Status.NOT_STARTED) {
+      // keep track of start time/frame for later
+      webcamWarning.tStart = t;  // (not accounting for frame time here)
+      webcamWarning.frameNStart = frameN;  // exact frame index
+      
+      webcamWarning.setAutoDraw(true);
+    }
+
+    // check for quit (typically the Esc key)
+    if (psychoJS.experiment.experimentEnded || psychoJS.eventManager.getKeys({keyList:['escape']}).length > 0) {
+      return quitPsychoJS('The [Escape] key was pressed. Goodbye!', false);
+    }
+    
+    // check if the Routine should terminate
+    if (!continueRoutine) {  // a component has requested a forced-end of Routine
+      return Scheduler.Event.NEXT;
+    }
+    
+    continueRoutine = false;  // reverts to True if at least one component still running
+    for (const thisComponent of initializeEyetrackingComponents)
+      if ('status' in thisComponent && thisComponent.status !== PsychoJS.Status.FINISHED) {
+        continueRoutine = true;
+        break;
+      }
+    
+    // refresh the screen if continuing
+    if (continueRoutine) {
+      return Scheduler.Event.FLIP_REPEAT;
+    } else {
+      return Scheduler.Event.NEXT;
+    }
+  };
+}
+
+
+function initializeEyetrackingRoutineEnd() {
+  return async function () {
+    //------Ending Routine 'initializeEyetracking'-------
+    for (const thisComponent of initializeEyetrackingComponents) {
+      if (typeof thisComponent.setAutoDraw === 'function') {
+        thisComponent.setAutoDraw(false);
+      }
+    }
+    
+    // Start gaze data logging now that eye tracking is initialized
+    if (window.webgazer && typeof startGazeLogging === 'function') {
+      console.log('Starting gaze logging after eye tracking initialization');
+      startGazeLogging();
+    } else {
+      console.warn('Could not start gaze logging - WebGazer not initialized or startGazeLogging not available');
+    }
+    
+    // the Routine "initializeEyetracking" was not non-slip safe, so reset the non-slip timer
+    routineTimer.reset();
+    
+    return Scheduler.Event.NEXT;
+  };
+}
+
+
+var _inst1_resp_allKeys;
+var inst1Components;
+function inst1RoutineBegin(snapshot) {
+  return async function () {
+    TrialHandler.fromSnapshot(snapshot); // ensure that .thisN vals are up to date
+    
+    //------Prepare to start Routine 'inst1'-------
+    t = 0;
+    inst1Clock.reset(); // clock
+    frameN = -1;
+    continueRoutine = true; // until we're told otherwise
+    // update component parameters for each repeat
+    document.getElementById('webgazerFaceFeedbackBox').style.display = 'none';
+    document.getElementById('webgazerVideoFeed').style.display = 'none';
+    inst1_resp.keys = undefined;
+    inst1_resp.rt = undefined;
+    _inst1_resp_allKeys = [];
+    // keep track of which components have finished
+    inst1Components = [];
+    inst1Components.push(instruction1Txt);
+    inst1Components.push(inst1_resp);
+    
+    for (const thisComponent of inst1Components)
+      if ('status' in thisComponent)
+        thisComponent.status = PsychoJS.Status.NOT_STARTED;
+    return Scheduler.Event.NEXT;
+  }
+}
+
+
+function inst1RoutineEachFrame() {
+  return async function () {
+    //------Loop for each frame of Routine 'inst1'-------
+    // get current time
+    t = inst1Clock.getTime();
+    frameN = frameN + 1;// number of completed frames (so 0 is the first frame)
+    // update/draw components on each frame
+    
+    // *instruction1Txt* updates
+    if (t >= 0.0 && instruction1Txt.status === PsychoJS.Status.NOT_STARTED) {
+      // keep track of start time/frame for later
+      instruction1Txt.tStart = t;  // (not accounting for frame time here)
+      instruction1Txt.frameNStart = frameN;  // exact frame index
+      
+      instruction1Txt.setAutoDraw(true);
+    }
+
+    
+    // *inst1_resp* updates
+    if (t >= 0.0 && inst1_resp.status === PsychoJS.Status.NOT_STARTED) {
+      // keep track of start time/frame for later
+      inst1_resp.tStart = t;  // (not accounting for frame time here)
+      inst1_resp.frameNStart = frameN;  // exact frame index
+      
+      // keyboard checking is just starting
+      psychoJS.window.callOnFlip(function() { inst1_resp.clock.reset(); });  // t=0 on next screen flip
+      psychoJS.window.callOnFlip(function() { inst1_resp.start(); }); // start on screen flip
+      psychoJS.window.callOnFlip(function() { inst1_resp.clearEvents(); });
+    }
+
+    if (inst1_resp.status === PsychoJS.Status.STARTED) {
+      let theseKeys = inst1_resp.getKeys({keyList: ['space'], waitRelease: false});
+      _inst1_resp_allKeys = _inst1_resp_allKeys.concat(theseKeys);
+      if (_inst1_resp_allKeys.length > 0) {
+        inst1_resp.keys = _inst1_resp_allKeys[_inst1_resp_allKeys.length - 1].name;  // just the last key pressed
+        inst1_resp.rt = _inst1_resp_allKeys[_inst1_resp_allKeys.length - 1].rt;
+        // a response ends the routine
+        continueRoutine = false;
+      }
+    }
+    
+    // check for quit (typically the Esc key)
+    if (psychoJS.experiment.experimentEnded || psychoJS.eventManager.getKeys({keyList:['escape']}).length > 0) {
+      return quitPsychoJS('The [Escape] key was pressed. Goodbye!', false);
+    }
+    
+    // check if the Routine should terminate
+    if (!continueRoutine) {  // a component has requested a forced-end of Routine
+      return Scheduler.Event.NEXT;
+    }
+    
+    continueRoutine = false;  // reverts to True if at least one component still running
+    for (const thisComponent of inst1Components)
+      if ('status' in thisComponent && thisComponent.status !== PsychoJS.Status.FINISHED) {
+        continueRoutine = true;
+        break;
+      }
+    
+    // refresh the screen if continuing
+    if (continueRoutine) {
+      return Scheduler.Event.FLIP_REPEAT;
+    } else {
+      return Scheduler.Event.NEXT;
+    }
+  };
+}
+
+
+function inst1RoutineEnd() {
+  return async function () {
+    //------Ending Routine 'inst1'-------
+    for (const thisComponent of inst1Components) {
+      if (typeof thisComponent.setAutoDraw === 'function') {
+        thisComponent.setAutoDraw(false);
+      }
+    }
+    psychoJS.experiment.addData('inst1_resp.keys', inst1_resp.keys);
+    if (typeof inst1_resp.keys !== 'undefined') {  // we had a response
+        psychoJS.experiment.addData('inst1_resp.rt', inst1_resp.rt);
+        routineTimer.reset();
+        }
+    
+    inst1_resp.stop();
+    // the Routine "inst1" was not non-slip safe, so reset the non-slip timer
+    routineTimer.reset();
+    
+    return Scheduler.Event.NEXT;
+  };
+}
+
+
+var gotValidClick;
+var calibrationIntroComponents;
+function calibrationIntroRoutineBegin(snapshot) {
+  return async function () {
+    TrialHandler.fromSnapshot(snapshot); // ensure that .thisN vals are up to date
+    
+    //------Prepare to start Routine 'calibrationIntro'-------
+    t = 0;
+    calibrationIntroClock.reset(); // clock
+    frameN = -1;
+    continueRoutine = true; // until we're told otherwise
+    // update component parameters for each repeat
+    // setup some python lists for storing info about the calibrationMouse
+    gotValidClick = false; // until a click is received
+    // keep track of which components have finished
+    calibrationIntroComponents = [];
+    calibrationIntroComponents.push(calibrationTxt);
+    calibrationIntroComponents.push(calibrationMouse);
+    
+    for (const thisComponent of calibrationIntroComponents)
+      if ('status' in thisComponent)
+        thisComponent.status = PsychoJS.Status.NOT_STARTED;
+    return Scheduler.Event.NEXT;
+  }
+}
+
+
+var prevButtonState;
+var _mouseButtons;
+function calibrationIntroRoutineEachFrame() {
+  return async function () {
+    //------Loop for each frame of Routine 'calibrationIntro'-------
+    // get current time
+    t = calibrationIntroClock.getTime();
+    frameN = frameN + 1;// number of completed frames (so 0 is the first frame)
+    // update/draw components on each frame
+    
+    // *calibrationTxt* updates
+    if (t >= 0.0 && calibrationTxt.status === PsychoJS.Status.NOT_STARTED) {
+      // keep track of start time/frame for later
+      calibrationTxt.tStart = t;  // (not accounting for frame time here)
+      calibrationTxt.frameNStart = frameN;  // exact frame index
+      
+      calibrationTxt.setAutoDraw(true);
+    }
+
+    // *calibrationMouse* updates
+    if (t >= 0.0 && calibrationMouse.status === PsychoJS.Status.NOT_STARTED) {
+      // keep track of start time/frame for later
+      calibrationMouse.tStart = t;  // (not accounting for frame time here)
+      calibrationMouse.frameNStart = frameN;  // exact frame index
+      
+      calibrationMouse.status = PsychoJS.Status.STARTED;
+      calibrationMouse.mouseClock.reset();
+      prevButtonState = calibrationMouse.getPressed();  // if button is down already this ISN'T a new click
+    }
+    
+    // Initialize tracking_square
+    tracking_square = new visual.Rect({
+      win: psychoJS.window,
+      name: 'tracking_square',
+      width: 0.05,
+      height: 0.05,
+      fillColor: new util.Color('white'),
+      opacity: undefined, 
+      depth: 0, 
+      interpolate: true
+    });
+    
+    trackingTxt = new visual.TextStim({
+      win: psychoJS.window,
+      name: 'trackingTxt',
+      text: 'Great! we are now tracking your eye movements! look around the screen to see how it works! \n\nPlease remember is important for you to keep your head still during the experiment. \n\nPress space to start',
+      font: 'Arial',
+      units: undefined, 
+      pos: [0, 0], height: 0.05,  wrapWidth: undefined, ori: 0.0,
+      color: new util.Color('white'),  opacity: undefined,
+      depth: -1.0 
+    });
+    
+    tracking_resp = new core.Keyboard({psychoJS: psychoJS, clock: new util.Clock(), waitForStart: true});
+    
+    // keep track of which components have finished
+    const trackingTrialComponents = [tracking_square, trackingTxt, tracking_resp];
+    for (const thisComponent of trackingTrialComponents)
+      if ('status' in thisComponent)
+        thisComponent.status = PsychoJS.Status.NOT_STARTED;
+    return Scheduler.Event.NEXT;
+  }
+}
+
+
+function trackingTrialRoutineEnd() {
+  return async function () {
+    //------Ending Routine 'trackingTrial'-------
+    for (const thisComponent of trackingTrialComponents) {
+      if (typeof thisComponent.setAutoDraw === 'function') {
+        thisComponent.setAutoDraw(false);
+      }
+    }
+    psychoJS.experiment.addData('trackingTrial_resp.keys', tracking_resp.keys);
+    if (typeof tracking_resp.keys !== 'undefined') {  // we had a response
+        psychoJS.experiment.addData('trackingTrial_resp.rt', tracking_resp.rt);
+        routineTimer.reset();
+        }
+    
+    tracking_resp.stop();
+    // the Routine "trackingTrial" was not non-slip safe, so reset the non-slip timer
+    routineTimer.reset();
+    
+    return Scheduler.Event.NEXT;
+  };
+}
+
+
+var t;
+var frameN;
+var continueRoutine;
+var initializeEyetrackingComponents;
+/** 
+ * This function initializes the eye tracking component of the experiment
+ * It has been updated to incorporate a simpler version for compatibility with older experiment versions
+ */
+function initializeEyetrackingRoutineBegin(snapshot) {
+  return async function () {
+    // Ensure TrialHandler is defined
+    if (typeof TrialHandler === 'undefined') {
+      console.error('TrialHandler is not defined. Make sure the main experiment file is loaded first.');
+      return;
+    }
+    
+    TrialHandler.fromSnapshot(snapshot); // ensure that .thisN vals are up to date
+    
+    //------Prepare to start Routine 'initializeEyetracking'-------
+    t = 0;
+    initializeEyetrackingClock.reset(); // clock
+    frameN = -1;
+    continueRoutine = true; // until we're told otherwise
+    
+    // Ensure WebGazer is properly loaded
+    if (typeof window.webgazer === 'undefined') {
+      console.error('WebGazer is not loaded. Attempting to load it again...');
+      try {
+        // Load WebGazer dynamically if it's not available
+        await psychoJS.serverManager.prepareResource('webgazer-2.0.1.js');
+        console.log('WebGazer loaded successfully');
+      } catch (error) {
+        console.error('Failed to load WebGazer:', error);
+      }
+    }
+    
+    // update component parameters for each repeat
+    // Show webcam thumbnail and face feedback box, but not face overlay and gaze dot
+    if (window.webgazer) {
+      window.webgazer.params.showVideoPreview = true;
+      window.webgazer.params.showFaceFeedbackBox = true;
+      window.webgazer.params.showFaceOverlay = false;
+      window.webgazer.params.showGazeDot = false;
+    } else {
+      console.error('WebGazer is still not available after loading attempt');
+    }
+    
+    // Configure data collection
+    const exportGazeData = () => {
+      try {
+        if (window.gazeDataBuffer && window.gazeDataBuffer.length > 0) {
+          // Add current batch of gaze data to experiment data
+          const batchData = {
+            timestamp: Date.now(),
+            sessionId: expInfo.participant + '_' + expInfo.session,
+            frameRate: expInfo.frameRate,
+            gazePoints: window.gazeDataBuffer,
+            bufferSize: window.gazeDataBuffer.length
+          };
+          
+          // Add batch to experiment data with unique identifier
+          const batchKey = 'gazeBatch_' + batchData.timestamp;
+          psychoJS.experiment.addData(batchKey, JSON.stringify(batchData));
+          
+          // Log export details
+          console.log(`Exported gaze data batch at ${new Date(batchData.timestamp).toISOString()}: ${batchData.gazePoints.length} points`);
+          
+          // Clear buffer after successful export
+          window.gazeDataBuffer = [];
+          window.lastExportTime = Date.now();
+          
+          // Record export success in experiment data
+          psychoJS.experiment.addData('gazeExportSuccess', true);
+          psychoJS.experiment.addData('gazeExportTimestamp', batchData.timestamp);
+          psychoJS.experiment.addData('gazeExportSize', batchData.bufferSize);
+        } else {
+          console.log('No gaze data to export at', new Date().toISOString());
+        }
+      } catch (error) {
+        // Handle export errors gracefully
+        console.error('Error exporting gaze data:', error);
+        psychoJS.experiment.addData('gazeExportError', error.message);
+        
+        // Attempt recovery by clearing buffer
+        window.gazeDataBuffer = [];
+        window.lastExportTime = Date.now();
+      }
+    };
+    
+    // Set up periodic export
+    window.gazeExportTimer = setInterval(() => {
+      exportGazeData();
+    }, window.gazeExportInterval);
+    
+    // Start eye tracking with enhanced data collection
+    window.webgazer
+        // Called on each eye tracking update
+        .setGazeListener(function(data, clock) {
+          if (data !== null) {
+            // Remove first element from gazes array, add current gaze at the end
+            window.xGazes.shift();
+            window.xGazes.push(data.x);
+            window.yGazes.shift();
+            window.yGazes.push(data.y);
+            
+            // Store gaze data for export
+            window.gazeDataBuffer.push({
+              timestamp: Date.now(),
+              x: data.x,
+              y: data.y,
+              eyeFeatures: data.eyeFeatures || null,
+              trialIndex: psychoJS.experiment.thisN || -1,
+              trialPhase: psychoJS.experiment.currentScheduler?.taskName || 'unknown'
+            });
+            
+            // Add to master data store for persistence
+            if (!window.masterGazeData) {
+              window.masterGazeData = [];
+            }
+            window.masterGazeData.push({
+              timestamp: Date.now(),
+              x: data.x,
+              y: data.y,
+              eyeFeatures: data.eyeFeatures || null,
+              trialIndex: psychoJS.experiment.thisN || -1,
+              trialPhase: psychoJS.experiment.currentScheduler?.taskName || 'unknown'
+            });
+            
+            // Export if buffer gets too large or time interval has passed
+            if (window.gazeDataBuffer.length > 100 || 
+                (Date.now() - window.lastExportTime) > window.gazeExportInterval) {
+              exportGazeData();
+            }
+          }
+        })
+        .begin();
+    
+    // keep track of which components have finished
+    initializeEyetrackingComponents = [];
+    initializeEyetrackingComponents.push(webcamWarning);
+    
+    for (const thisComponent of initializeEyetrackingComponents)
+      if ('status' in thisComponent)
+        thisComponent.status = PsychoJS.Status.NOT_STARTED;
+    return Scheduler.Event.NEXT;
+  }
+}
+
+
+function initializeEyetrackingRoutineEachFrame() {
+  return async function () {
+    //------Loop for each frame of Routine 'initializeEyetracking'-------
+    // get current time
+    t = initializeEyetrackingClock.getTime();
+    frameN = frameN + 1;// number of completed frames (so 0 is the first frame)
+    // update/draw components on each frame
+    // Finish routine once everything is ready
+    continueRoutine = 
+      !window.webgazer.isReady() || 
+      document.getElementById('webgazerFaceFeedbackBox') === null ||
+      document.getElementById('webgazerVideoFeed') === null;
+    
+    // *webcamWarning* updates
+    if (t >= 0.0 && webcamWarning.status === PsychoJS.Status.NOT_STARTED) {
+      // keep track of start time/frame for later
+      webcamWarning.tStart = t;  // (not accounting for frame time here)
+      webcamWarning.frameNStart = frameN;  // exact frame index
+      
+      webcamWarning.setAutoDraw(true);
+    }
+
+    // check for quit (typically the Esc key)
+    if (psychoJS.experiment.experimentEnded || psychoJS.eventManager.getKeys({keyList:['escape']}).length > 0) {
+      return quitPsychoJS('The [Escape] key was pressed. Goodbye!', false);
+    }
+    
+    // check if the Routine should terminate
+    if (!continueRoutine) {  // a component has requested a forced-end of Routine
+      return Scheduler.Event.NEXT;
+    }
+    
+    continueRoutine = false;  // reverts to True if at least one component still running
+    for (const thisComponent of initializeEyetrackingComponents)
+      if ('status' in thisComponent && thisComponent.status !== PsychoJS.Status.FINISHED) {
+        continueRoutine = true;
+        break;
+      }
+    
+    // refresh the screen if continuing
+    if (continueRoutine) {
+      return Scheduler.Event.FLIP_REPEAT;
+    } else {
+      return Scheduler.Event.NEXT;
+    }
+  };
+}
+
+
+function initializeEyetrackingRoutineEnd() {
+  return async function () {
+    //------Ending Routine 'initializeEyetracking'-------
+    for (const thisComponent of initializeEyetrackingComponents) {
+      if (typeof thisComponent.setAutoDraw === 'function') {
+        thisComponent.setAutoDraw(false);
+      }
+    }
+    
+    // Start gaze data logging now that eye tracking is initialized
+    if (window.webgazer && typeof startGazeLogging === 'function') {
+      console.log('Starting gaze logging after eye tracking initialization');
+      startGazeLogging();
+    } else {
+      console.warn('Could not start gaze logging - WebGazer not initialized or startGazeLogging not available');
+    }
+    
+    // the Routine "initializeEyetracking" was not non-slip safe, so reset the non-slip timer
+    routineTimer.reset();
+    
+    return Scheduler.Event.NEXT;
+  };
+}
+
+
+var _inst1_resp_allKeys;
+var inst1Components;
+function inst1RoutineBegin(snapshot) {
+  return async function () {
+    TrialHandler.fromSnapshot(snapshot); // ensure that .thisN vals are up to date
+    
+    //------Prepare to start Routine 'inst1'-------
+    t = 0;
+    inst1Clock.reset(); // clock
+    frameN = -1;
+    continueRoutine = true; // until we're told otherwise
+    // update component parameters for each repeat
+    document.getElementById('webgazerFaceFeedbackBox').style.display = 'none';
+    document.getElementById('webgazerVideoFeed').style.display = 'none';
+    inst1_resp.keys = undefined;
+    inst1_resp.rt = undefined;
+    _inst1_resp_allKeys = [];
+    // keep track of which components have finished
+    inst1Components = [];
+    inst1Components.push(instruction1Txt);
+    inst1Components.push(inst1_resp);
+    
+    for (const thisComponent of inst1Components)
+      if ('status' in thisComponent)
+        thisComponent.status = PsychoJS.Status.NOT_STARTED;
+    return Scheduler.Event.NEXT;
+  }
+}
+
+
+function inst1RoutineEachFrame() {
+  return async function () {
+    //------Loop for each frame of Routine 'inst1'-------
+    // get current time
+    t = inst1Clock.getTime();
+    frameN = frameN + 1;// number of completed frames (so 0 is the first frame)
+    // update/draw components on each frame
+    
+    // *instruction1Txt* updates
+    if (t >= 0.0 && instruction1Txt.status === PsychoJS.Status.NOT_STARTED) {
+      // keep track of start time/frame for later
+      instruction1Txt.tStart = t;  // (not accounting for frame time here)
+      instruction1Txt.frameNStart = frameN;  // exact frame index
+      
+      instruction1Txt.setAutoDraw(true);
+    }
+
+    
+    // *inst1_resp* updates
+    if (t >= 0.0 && inst1_resp.status === PsychoJS.Status.NOT_STARTED) {
+      // keep track of start time/frame for later
+      inst1_resp.tStart = t;  // (not accounting for frame time here)
+      inst1_resp.frameNStart = frameN;  // exact frame index
+      
+      // keyboard checking is just starting
+      psychoJS.window.callOnFlip(function() { inst1_resp.clock.reset(); });  // t=0 on next screen flip
+      psychoJS.window.callOnFlip(function() { inst1_resp.start(); }); // start on screen flip
+      psychoJS.window.callOnFlip(function() { inst1_resp.clearEvents(); });
+    }
+
+    if (inst1_resp.status === PsychoJS.Status.STARTED) {
+      let theseKeys = inst1_resp.getKeys({keyList: ['space'], waitRelease: false});
+      _inst1_resp_allKeys = _inst1_resp_allKeys.concat(theseKeys);
+      if (_inst1_resp_allKeys.length > 0) {
+        inst1_resp.keys = _inst1_resp_allKeys[_inst1_resp_allKeys.length - 1].name;  // just the last key pressed
+        inst1_resp.rt = _inst1_resp_allKeys[_inst1_resp_allKeys.length - 1].rt;
+        // a response ends the routine
+        continueRoutine = false;
+      }
+    }
+    
+    // check for quit (typically the Esc key)
+    if (psychoJS.experiment.experimentEnded || psychoJS.eventManager.getKeys({keyList:['escape']}).length > 0) {
+      return quitPsychoJS('The [Escape] key was pressed. Goodbye!', false);
+    }
+    
+    // check if the Routine should terminate
+    if (!continueRoutine) {  // a component has requested a forced-end of Routine
+      return Scheduler.Event.NEXT;
+    }
+    
+    continueRoutine = false;  // reverts to True if at least one component still running
+    for (const thisComponent of inst1Components)
+      if ('status' in thisComponent && thisComponent.status !== PsychoJS.Status.FINISHED) {
+        continueRoutine = true;
+        break;
+      }
+    
+    // refresh the screen if continuing
+    if (continueRoutine) {
+      return Scheduler.Event.FLIP_REPEAT;
+    } else {
+      return Scheduler.Event.NEXT;
+    }
+  };
+}
+
+
+function inst1RoutineEnd() {
+  return async function () {
+    //------Ending Routine 'inst1'-------
+    for (const thisComponent of inst1Components) {
+      if (typeof thisComponent.setAutoDraw === 'function') {
+        thisComponent.setAutoDraw(false);
+      }
+    }
+    psychoJS.experiment.addData('inst1_resp.keys', inst1_resp.keys);
+    if (typeof inst1_resp.keys !== 'undefined') {  // we had a response
+        psychoJS.experiment.addData('inst1_resp.rt', inst1_resp.rt);
+        routineTimer.reset();
+        }
+    
+    inst1_resp.stop();
+    // the Routine "inst1" was not non-slip safe, so reset the non-slip timer
+    routineTimer.reset();
+    
+    return Scheduler.Event.NEXT;
+  };
+}
+
+
+var gotValidClick;
+var calibrationIntroComponents;
+function calibrationIntroRoutineBegin(snapshot) {
+  return async function () {
+    TrialHandler.fromSnapshot(snapshot); // ensure that .thisN vals are up to date
+    
+    //------Prepare to start Routine 'calibrationIntro'-------
+    t = 0;
+    calibrationIntroClock.reset(); // clock
+    frameN = -1;
+    continueRoutine = true; // until we're told otherwise
+    // update component parameters for each repeat
+    // setup some python lists for storing info about the calibrationMouse
+    gotValidClick = false; // until a click is received
+    // keep track of which components have finished
+    calibrationIntroComponents = [];
+    calibrationIntroComponents.push(calibrationTxt);
+    calibrationIntroComponents.push(calibrationMouse);
+    
+    for (const thisComponent of calibrationIntroComponents)
+      if ('status' in thisComponent)
+        thisComponent.status = PsychoJS.Status.NOT_STARTED;
+    return Scheduler.Event.NEXT;
+  }
+}
+
+
+var prevButtonState;
+var _mouseButtons;
+function calibrationIntroRoutineEachFrame() {
+  return async function () {
+    //------Loop for each frame of Routine 'calibrationIntro'-------
+    // get current time
+    t = calibrationIntroClock.getTime();
+    frameN = frameN + 1;// number of completed frames (so 0 is the first frame)
+    // update/draw components on each frame
+    
+    // *calibrationTxt* updates
+    if (t >= 0.0 && calibrationTxt.status === PsychoJS.Status.NOT_STARTED) {
+      // keep track of start time/frame for later
+      calibrationTxt.tStart = t;  // (not accounting for frame time here)
+      calibrationTxt.frameNStart = frameN;  // exact frame index
+      
+      calibrationTxt.setAutoDraw(true);
+    }
+
+    // *calibrationMouse* updates
+    if (t >= 0.0 && calibrationMouse.status === PsychoJS.Status.NOT_STARTED) {
+      // keep track of start time/frame for later
+      calibrationMouse.tStart = t;  // (not accounting for frame time here)
+      calibrationMouse.frameNStart = frameN;  // exact frame index
+      
+      calibrationMouse.status = PsychoJS.Status.STARTED;
+      calibrationMouse.mouseClock.reset();
+      prevButtonState = calibrationMouse.getPressed();  // if button is down already this ISN'T a new click
+    }
+    
+    // Initialize tracking_square
+    tracking_square = new visual.Rect({
+      win: psychoJS.window,
+      name: 'tracking_square',
+      width: 0.05,
+      height: 0.05,
+      fillColor: new util.Color('white'),
+      opacity: undefined, 
+      depth: 0, 
+      interpolate: true
+    });
+    
+    trackingTxt = new visual.TextStim({
+      win: psychoJS.window,
+      name: 'trackingTxt',
+      text: 'Great! we are now tracking your eye movements! look around the screen to see how it works! \n\nPlease remember is important for you to keep your head still during the experiment. \n\nPress space to start',
+      font: 'Arial',
+      units: undefined, 
+      pos: [0, 0], height: 0.05,  wrapWidth: undefined, ori: 0.0,
+      color: new util.Color('white'),  opacity: undefined,
+      depth: -1.0 
+    });
+    
+    tracking_resp = new core.Keyboard({psychoJS: psychoJS, clock: new util.Clock(), waitForStart: true});
+    
+    // keep track of which components have finished
+    const trackingTrialComponents = [tracking_square, trackingTxt, tracking_resp];
+    for (const thisComponent of trackingTrialComponents)
+      if ('status' in thisComponent)
+        thisComponent.status = PsychoJS.Status.NOT_STARTED;
+    return Scheduler.Event.NEXT;
+  }
+}
+
+
+function trackingTrialRoutineEnd() {
+  return async function () {
+    //------Ending Routine 'trackingTrial'-------
+    for (const thisComponent of trackingTrialComponents) {
+      if (typeof thisComponent.setAutoDraw === 'function') {
+        thisComponent.setAutoDraw(false);
+      }
+    }
+    psychoJS.experiment.addData('trackingTrial_resp.keys', tracking_resp.keys);
+    if (typeof tracking_resp.keys !== 'undefined') {  // we had a response
+        psychoJS.experiment.addData('trackingTrial_resp.rt', tracking_resp.rt);
+        routineTimer.reset();
+        }
+    
+    tracking_resp.stop();
+    // the Routine "trackingTrial" was not non-slip safe, so reset the non-slip timer
+    routineTimer.reset();
+    
+    return Scheduler.Event.NEXT;
+  };
+}
+
+
+var t;
+var frameN;
+var continueRoutine;
+var initializeEyetrackingComponents;
+/** 
+ * This function initializes the eye tracking component of the experiment
+ * It has been updated to incorporate a simpler version for compatibility with older experiment versions
+ */
+function initializeEyetrackingRoutineBegin(snapshot) {
+  return async function () {
+    // Ensure TrialHandler is defined
+    if (typeof TrialHandler === 'undefined') {
+      console.error('TrialHandler is not defined. Make sure the main experiment file is loaded first.');
+      return;
+    }
+    
+    TrialHandler.fromSnapshot(snapshot); // ensure that .thisN vals are up to date
+    
+    //------Prepare to start Routine 'initializeEyetracking'-------
+    t = 0;
+    initializeEyetrackingClock.reset(); // clock
+    frameN = -1;
+    continueRoutine = true; // until we're told otherwise
+    
+    // Ensure WebGazer is properly loaded
+    if (typeof window.webgazer === 'undefined') {
+      console.error('WebGazer is not loaded. Attempting to load it again...');
+      try {
+        // Load WebGazer dynamically if it's not available
+        await psychoJS.serverManager.prepareResource('webgazer-2.0.1.js');
+        console.log('WebGazer loaded successfully');
+      } catch (error) {
+        console.error('Failed to load WebGazer:', error);
+      }
+    }
+    
+    // update component parameters for each repeat
+    // Show webcam thumbnail and face feedback box, but not face overlay and gaze dot
+    if (window.webgazer) {
+      window.webgazer.params.showVideoPreview = true;
+      window.webgazer.params.showFaceFeedbackBox = true;
+      window.webgazer.params.showFaceOverlay = false;
+      window.webgazer.params.showGazeDot = false;
+    } else {
+      console.error('WebGazer is still not available after loading attempt');
+    }
+    
+    // Configure data collection
+    const exportGazeData = () => {
+      try {
+        if (window.gazeDataBuffer && window.gazeDataBuffer.length > 0) {
+          // Add current batch of gaze data to experiment data
+          const batchData = {
+            timestamp: Date.now(),
+            sessionId: expInfo.participant + '_' + expInfo.session,
+            frameRate: expInfo.frameRate,
+            gazePoints: window.gazeDataBuffer,
+            bufferSize: window.gazeDataBuffer.length
+          };
+          
+          // Add batch to experiment data with unique identifier
+          const batchKey = 'gazeBatch_' + batchData.timestamp;
+          psychoJS.experiment.addData(batchKey, JSON.stringify(batchData));
+          
+          // Log export details
+          console.log(`Exported gaze data batch at ${new Date(batchData.timestamp).toISOString()}: ${batchData.gazePoints.length} points`);
+          
+          // Clear buffer after successful export
+          window.gazeDataBuffer = [];
+          window.lastExportTime = Date.now();
+          
+          // Record export success in experiment data
+          psychoJS.experiment.addData('gazeExportSuccess', true);
+          psychoJS.experiment.addData('gazeExportTimestamp', batchData.timestamp);
+          psychoJS.experiment.addData('gazeExportSize', batchData.bufferSize);
+        } else {
+          console.log('No gaze data to export at', new Date().toISOString());
+        }
+      } catch (error) {
+        // Handle export errors gracefully
+        console.error('Error exporting gaze data:', error);
+        psychoJS.experiment.addData('gazeExportError', error.message);
+        
+        // Attempt recovery by clearing buffer
+        window.gazeDataBuffer = [];
+        window.lastExportTime = Date.now();
+      }
+    };
+    
+    // Set up periodic export
+    window.gazeExportTimer = setInterval(() => {
+      exportGazeData();
+    }, window.gazeExportInterval);
+    
+    // Start eye tracking with enhanced data collection
+    window.webgazer
+        // Called on each eye tracking update
+        .setGazeListener(function(data, clock) {
+          if (data !== null) {
+            // Remove first element from gazes array, add current gaze at the end
+            window.xGazes.shift();
+            window.xGazes.push(data.x);
+            window.yGazes.shift();
+            window.yGazes.push(data.y);
+            
+            // Store gaze data for export
+            window.gazeDataBuffer.push({
+              timestamp: Date.now(),
+              x: data.x,
+              y: data.y,
+              eyeFeatures: data.eyeFeatures || null,
+              trialIndex: psychoJS.experiment.thisN || -1,
+              trialPhase: psychoJS.experiment.currentScheduler?.taskName || 'unknown'
+            });
+            
+            // Add to master data store for persistence
+            if (!window.masterGazeData) {
+              window.masterGazeData = [];
+            }
+            window.masterGazeData.push({
+              timestamp: Date.now(),
+              x: data.x,
+              y: data.y,
+              eyeFeatures: data.eyeFeatures || null,
+              trialIndex: psychoJS.experiment.thisN || -1,
+              trialPhase: psychoJS.experiment.currentScheduler?.taskName || 'unknown'
+            });
+            
+            // Export if buffer gets too large or time interval has passed
+            if (window.gazeDataBuffer.length > 100 || 
+                (Date.now() - window.lastExportTime) > window.gazeExportInterval) {
+              exportGazeData();
+            }
+          }
+        })
+        .begin();
+    
+    // keep track of which components have finished
+    initializeEyetrackingComponents = [];
+    initializeEyetrackingComponents.push(webcamWarning);
+    
+    for (const thisComponent of initializeEyetrackingComponents)
+      if ('status' in thisComponent)
+        thisComponent.status = PsychoJS.Status.NOT_STARTED;
+    return Scheduler.Event.NEXT;
+  }
+}
+
+
+function initializeEyetrackingRoutineEachFrame() {
+  return async function () {
+    //------Loop for each frame of Routine 'initializeEyetracking'-------
+    // get current time
+    t = initializeEyetrackingClock.getTime();
+    frameN = frameN + 1;// number of completed frames (so 0 is the first frame)
+    // update/draw components on each frame
+    // Finish routine once everything is ready
+    continueRoutine = 
+      !window.webgazer.isReady() || 
+      document.getElementById('webgazerFaceFeedbackBox') === null ||
+      document.getElementById('webgazerVideoFeed') === null;
+    
+    // *webcamWarning* updates
+    if (t >= 0.0 && webcamWarning.status === PsychoJS.Status.NOT_STARTED) {
+      // keep track of start time/frame for later
+      webcamWarning.tStart = t;  // (not accounting for frame time here)
+      webcamWarning.frameNStart = frameN;  // exact frame index
+      
+      webcamWarning.setAutoDraw(true);
+    }
+
+    // check for quit (typically the Esc key)
+    if (psychoJS.experiment.experimentEnded || psychoJS.eventManager.getKeys({keyList:['escape']}).length > 0) {
+      return quitPsychoJS('The [Escape] key was pressed. Goodbye!', false);
+    }
+    
+    // check if the Routine should terminate
+    if (!continueRoutine) {  // a component has requested a forced-end of Routine
+      return Scheduler.Event.NEXT;
+    }
+    
+    continueRoutine = false;  // reverts to True if at least one component still running
+    for (const thisComponent of initializeEyetrackingComponents)
+      if ('status' in thisComponent && thisComponent.status !== PsychoJS.Status.FINISHED) {
+        continueRoutine = true;
+        break;
+      }
+    
+    // refresh the screen if continuing
+    if (continueRoutine) {
+      return Scheduler.Event.FLIP_REPEAT;
+    } else {
+      return Scheduler.Event.NEXT;
+    }
+  };
+}
+
+
+function initializeEyetrackingRoutineEnd() {
+  return async function () {
+    //------Ending Routine 'initializeEyetracking'-------
+    for (const thisComponent of initializeEyetrackingComponents) {
+      if (typeof thisComponent.setAutoDraw === 'function') {
+        thisComponent.setAutoDraw(false);
+      }
+    }
+    
+    // Start gaze data logging now that eye tracking is initialized
+    if (window.webgazer && typeof startGazeLogging === 'function') {
+      console.log('Starting gaze logging after eye tracking initialization');
+      startGazeLogging();
+    } else {
+      console.warn('Could not start gaze logging - WebGazer not initialized or startGazeLogging not available');
+    }
+    
+    // the Routine "initializeEyetracking" was not non-slip safe, so reset the non-slip timer
+    routineTimer.reset();
+    
+    return Scheduler.Event.NEXT;
+  };
+}
+
+
+var _inst1_resp_allKeys;
+var inst1Components;
+function inst1RoutineBegin(snapshot) {
+  return async function () {
+    TrialHandler.fromSnapshot(snapshot); // ensure that .thisN vals are up to date
+    
+    //------Prepare to start Routine 'inst1'-------
+    t = 0;
+    inst1Clock.reset(); // clock
+    frameN = -1;
+    continueRoutine = true; // until we're told otherwise
+    // update component parameters for each repeat
+    document.getElementById('webgazerFaceFeedbackBox').style.display = 'none';
+    document.getElementById('webgazerVideoFeed').style.display = 'none';
+    inst1_resp.keys = undefined;
+    inst1_resp.rt = undefined;
+    _inst1_resp_allKeys = [];
+    // keep track of which components have finished
+    inst1Components = [];
+    inst1Components.push(instruction1Txt);
+    inst1Components.push(inst1_resp);
+    
+    for (const thisComponent of inst1Components)
+      if ('status' in thisComponent)
+        thisComponent.status = PsychoJS.Status.NOT_STARTED;
+    return Scheduler.Event.NEXT;
+  }
+}
+
+
+function inst1RoutineEachFrame() {
+  return async function () {
+    //------Loop for each frame of Routine 'inst1'-------
+    // get current time
+    t = inst1Clock.getTime();
+    frameN = frameN + 1;// number of completed frames (so 0 is the first frame)
+    // update/draw components on each frame
+    
+    // *instruction1Txt* updates
+    if (t >= 0.0 && instruction1Txt.status === PsychoJS.Status.NOT_STARTED) {
+      // keep track of start time/frame for later
+      instruction1Txt.tStart = t;  // (not accounting for frame time here)
+      instruction1Txt.frameNStart = frameN;  // exact frame index
+      
+      instruction1Txt.setAutoDraw(true);
+    }
+
+    
+    // *inst1_resp* updates
+    if (t >= 0.0 && inst1_resp.status === PsychoJS.Status.NOT_STARTED) {
+      // keep track of start time/frame for later
+      inst1_resp.tStart = t;  // (not accounting for frame time here)
+      inst1_resp.frameNStart = frameN;  // exact frame index
+      
+      // keyboard checking is just starting
+      psychoJS.window.callOnFlip(function() { inst1_resp.clock.reset(); });  // t=0 on next screen flip
+      psychoJS.window.callOnFlip(function() { inst1_resp.start(); }); // start on screen flip
+      psychoJS.window.callOnFlip(function() { inst1_resp.clearEvents(); });
+    }
+
+    if (inst1_resp.status === PsychoJS.Status.STARTED) {
+      let theseKeys = inst1_resp.getKeys({keyList: ['space'], waitRelease: false});
+      _inst1_resp_allKeys = _inst1_resp_allKeys.concat(theseKeys);
+      if (_inst1_resp_allKeys.length > 0) {
+        inst1_resp.keys = _inst1_resp_allKeys[_inst1_resp_allKeys.length - 1].name;  // just the last key pressed
+        inst1_resp.rt = _inst1_resp_allKeys[_inst1_resp_allKeys.length - 1].rt;
+        // a response ends the routine
+        continueRoutine = false;
+      }
+    }
+    
+    // check for quit (typically the Esc key)
+    if (psychoJS.experiment.experimentEnded || psychoJS.eventManager.getKeys({keyList:['escape']}).length > 0) {
+      return quitPsychoJS('The [Escape] key was pressed. Goodbye!', false);
+    }
+    
+    // check if the Routine should terminate
+    if (!continueRoutine) {  // a component has requested a forced-end of Routine
+      return Scheduler.Event.NEXT;
+    }
+    
+    continueRoutine = false;  // reverts to True if at least one component still running
+    for (const thisComponent of inst1Components)
+      if ('status' in thisComponent && thisComponent.status !== PsychoJS.Status.FINISHED) {
+        continueRoutine = true;
+        break;
+      }
+    
+    // refresh the screen if continuing
+    if (continueRoutine) {
+      return Scheduler.Event.FLIP_REPEAT;
+    } else {
+      return Scheduler.Event.NEXT;
+    }
+  };
+}
+
+
+function inst1RoutineEnd() {
+  return async function () {
+    //------Ending Routine 'inst1'-------
+    for (const thisComponent of inst1Components) {
+      if (typeof thisComponent.setAutoDraw === 'function') {
+        thisComponent.setAutoDraw(false);
+      }
+    }
+    psychoJS.experiment.addData('inst1_resp.keys', inst1_resp.keys);
+    if (typeof inst1_resp.keys !== 'undefined') {  // we had a response
+        psychoJS.experiment.addData('inst1_resp.rt', inst1_resp.rt);
+        routineTimer.reset();
+        }
+    
+    inst1_resp.stop();
+    // the Routine "inst1" was not non-slip safe, so reset the non-slip timer
+    routineTimer.reset();
+    
+    return Scheduler.Event.NEXT;
+  };
+}
+
+
+var gotValidClick;
+var calibrationIntroComponents;
+function calibrationIntroRoutineBegin(snapshot) {
+  return async function () {
+    TrialHandler.fromSnapshot(snapshot); // ensure that .thisN vals are up to date
+    
+    //------Prepare to start Routine 'calibrationIntro'-------
+    t = 0;
+    calibrationIntroClock.reset(); // clock
+    frameN = -1;
+    continueRoutine = true; // until we're told otherwise
+    // update component parameters for each repeat
+    // setup some python lists for storing info about the calibrationMouse
+    gotValidClick = false; // until a click is received
+    // keep track of which components have finished
+    calibrationIntroComponents = [];
+    calibrationIntroComponents.push(calibrationTxt);
+    calibrationIntroComponents.push(calibrationMouse);
+    
+    for (const thisComponent of calibrationIntroComponents)
+      if ('status' in thisComponent)
+        thisComponent.status = PsychoJS.Status.NOT_STARTED;
+    return Scheduler.Event.NEXT;
+  }
+}
+
+
+var prevButtonState;
+var _mouseButtons;
+function calibrationIntroRoutineEachFrame() {
+  return async function () {
+    //------Loop for each frame of Routine 'calibrationIntro'-------
+    // get current time
+    t = calibrationIntroClock.getTime();
+    frameN = frameN + 1;// number of completed frames (so 0 is the first frame)
+    // update/draw components on each frame
+    
+    // *calibrationTxt* updates
+    if (t >= 0.0 && calibrationTxt.status === PsychoJS.Status.NOT_STARTED) {
+      // keep track of start time/frame for later
+      calibrationTxt.tStart = t;  // (not accounting for frame time here)
+      calibrationTxt.frameNStart = frameN;  // exact frame index
+      
+      calibrationTxt.setAutoDraw(true);
+    }
+
+    // *calibrationMouse* updates
+    if (t >= 0.0 && calibrationMouse.status === PsychoJS.Status.NOT_STARTED) {
+      // keep track of start time/frame for later
+      calibrationMouse.tStart = t;  // (not accounting for frame time here)
+      calibrationMouse.frameNStart = frameN;  // exact frame index
+      
+      calibrationMouse.status = PsychoJS.Status.STARTED;
+      calibrationMouse.mouseClock.reset();
+      prevButtonState = calibrationMouse.getPressed();  // if button is down already this ISN'T a new click
+    }
+    
+    // Initialize tracking_square
+    tracking_square = new visual.Rect({
+      win: psychoJS.window,
+      name: 'tracking_square',
+      width: 0.05,
+      height: 0.05,
+      fillColor: new util.Color('white'),
+      opacity: undefined, 
+      depth: 0, 
+      interpolate: true
+    });
+    
+    trackingTxt = new visual.TextStim({
+      win: psychoJS.window,
+      name: 'trackingTxt',
+      text: 'Great! we are now tracking your eye movements! look around the screen to see how it works! \n\nPlease remember is important for you to keep your head still during the experiment. \n\nPress space to start',
+      font: 'Arial',
+      units: undefined, 
+      pos: [0, 0], height: 0.05,  wrapWidth: undefined, ori: 0.0,
+      color: new util.Color('white'),  opacity: undefined,
+      depth: -1.0 
+    });
+    
+    tracking_resp = new core.Keyboard({psychoJS: psychoJS, clock: new util.Clock(), waitForStart: true});
+    
+    // keep track of which components have finished
+    const trackingTrialComponents = [tracking_square, trackingTxt, tracking_resp];
+    for (const thisComponent of trackingTrialComponents)
+      if ('status' in thisComponent)
+        thisComponent.status = PsychoJS.Status.NOT_STARTED;
+    return Scheduler.Event.NEXT;
+  }
+}
+
+
+function trackingTrialRoutineEnd() {
+  return async function () {
+    //------Ending Routine 'trackingTrial'-------
+    for (const thisComponent of trackingTrialComponents) {
+      if (typeof thisComponent.setAutoDraw === 'function') {
+        thisComponent.setAutoDraw(false);
+      }
+    }
+    psychoJS.experiment.addData('trackingTrial_resp.keys', tracking_resp.keys);
+    if (typeof tracking_resp.keys !== 'undefined') {  // we had a response
+        psychoJS.experiment.addData('trackingTrial_resp.rt', tracking_resp.rt);
+        routineTimer.reset();
+        }
+    
+    tracking_resp.stop();
+    // the Routine "trackingTrial" was not non-slip safe, so reset the non-slip timer
+    routineTimer.reset();
+    
+    return Scheduler.Event.NEXT;
+  };
+}
+
+
+var t;
+var frameN;
+var continueRoutine;
+var initializeEyetrackingComponents;
+/** 
+ * This function initializes the eye tracking component of the experiment
+ * It has been updated to incorporate a simpler version for compatibility with older experiment versions
+ */
+function initializeEyetrackingRoutineBegin(snapshot) {
+  return async function () {
+    // Ensure TrialHandler is defined
+    if (typeof TrialHandler === 'undefined') {
+      console.error('TrialHandler is not defined. Make sure the main experiment file is loaded first.');
+      return;
+    }
+    
+    TrialHandler.fromSnapshot(snapshot); // ensure that .thisN vals are up to date
+    
+    //------Prepare to start Routine 'initializeEyetracking'-------
+    t = 0;
+    initializeEyetrackingClock.reset(); // clock
+    frameN = -1;
+    continueRoutine = true; // until we're told otherwise
+    
+    // Ensure WebGazer is properly loaded
+    if (typeof window.webgazer === 'undefined') {
+      console.error('WebGazer is not loaded. Attempting to load it again...');
+      try {
+        // Load WebGazer dynamically if it's not available
+        await psychoJS.serverManager.prepareResource('webgazer-2.0.1.js');
+        console.log('WebGazer loaded successfully');
+      } catch (error) {
+        console.error('Failed to load WebGazer:', error);
+      }
+    }
+    
+    // update component parameters for each repeat
+    // Show webcam thumbnail and face feedback box, but not face overlay and gaze dot
+    if (window.webgazer) {
+      window.webgazer.params.showVideoPreview = true;
+      window.webgazer.params.showFaceFeedbackBox = true;
+      window.webgazer.params.showFaceOverlay = false;
+      window.webgazer.params.showGazeDot = false;
+    } else {
+      console.error('WebGazer is still not available after loading attempt');
+    }
+    
+    // Configure data collection
+    const exportGazeData = () => {
+      try {
+        if (window.gazeDataBuffer && window.gazeDataBuffer.length > 0) {
+          // Add current batch of gaze data to experiment data
+          const batchData = {
+            timestamp: Date.now(),
+            sessionId: expInfo.participant + '_' + expInfo.session,
+            frameRate: expInfo.frameRate,
+            gazePoints: window.gazeDataBuffer,
+            bufferSize: window.gazeDataBuffer.length
+          };
+          
+          // Add batch to experiment data with unique identifier
+          const batchKey = 'gazeBatch_' + batchData.timestamp;
+          psychoJS.experiment.addData(batchKey, JSON.stringify(batchData));
+          
+          // Log export details
+          console.log(`Exported gaze data batch at ${new Date(batchData.timestamp).toISOString()}: ${batchData.gazePoints.length} points`);
+          
+          // Clear buffer after successful export
+          window.gazeDataBuffer = [];
+          window.lastExportTime = Date.now();
+          
+          // Record export success in experiment data
+          psychoJS.experiment.addData('gazeExportSuccess', true);
+          psychoJS.experiment.addData('gazeExportTimestamp', batchData.timestamp);
+          psychoJS.experiment.addData('gazeExportSize', batchData.bufferSize);
+        } else {
+          console.log('No gaze data to export at', new Date().toISOString());
+        }
+      } catch (error) {
+        // Handle export errors gracefully
+        console.error('Error exporting gaze data:', error);
+        psychoJS.experiment.addData('gazeExportError', error.message);
+        
+        // Attempt recovery by clearing buffer
+        window.gazeDataBuffer = [];
+        window.lastExportTime = Date.now();
+      }
+    };
+    
+    // Set up periodic export
+    window.gazeExportTimer = setInterval(() => {
+      exportGazeData();
+    }, window.gazeExportInterval);
+    
+    // Start eye tracking with enhanced data collection
+    window.webgazer
+        // Called on each eye tracking update
+        .setGazeListener(function(data, clock) {
+          if (data !== null) {
+            // Remove first element from gazes array, add current gaze at the end
+            window.xGazes.shift();
+            window.xGazes.push(data.x);
+            window.yGazes.shift();
+            window.yGazes.push(data.y);
+            
+            // Store gaze data for export
+            window.gazeDataBuffer.push({
+              timestamp: Date.now(),
+              x: data.x,
+              y: data.y,
+              eyeFeatures: data.eyeFeatures || null,
+              trialIndex: psychoJS.experiment.thisN || -1,
+              trialPhase: psychoJS.experiment.currentScheduler?.taskName || 'unknown'
+            });
+            
+            // Add to master data store for persistence
+            if (!window.masterGazeData) {
+              window.masterGazeData = [];
+            }
+            window.masterGazeData.push({
+              timestamp: Date.now(),
+              x: data.x,
+              y: data.y,
+              eyeFeatures: data.eyeFeatures || null,
+              trialIndex: psychoJS.experiment.thisN || -1,
+              trialPhase: psychoJS.experiment.currentScheduler?.taskName || 'unknown'
+            });
+            
+            // Export if buffer gets too large or time interval has passed
+            if (window.gazeDataBuffer.length > 100 || 
+                (Date.now() - window.lastExportTime) > window.gazeExportInterval) {
+              exportGazeData();
+            }
+          }
+        })
+        .begin();
+    
+    // keep track of which components have finished
+    initializeEyetrackingComponents = [];
+    initializeEyetrackingComponents.push(webcamWarning);
+    
+    for (const thisComponent of initializeEyetrackingComponents)
+      if ('status' in thisComponent)
+        thisComponent.status = PsychoJS.Status.NOT_STARTED;
+    return Scheduler.Event.NEXT;
+  }
+}
+
+
+function initializeEyetrackingRoutineEachFrame() {
+  return async function () {
+    //------Loop for each frame of Routine 'initializeEyetracking'-------
+    // get current time
+    t = initializeEyetrackingClock.getTime();
+    frameN = frameN + 1;// number of completed frames (so 0 is the first frame)
+    // update/draw components on each frame
+    // Finish routine once everything is ready
+    continueRoutine = 
+      !window.webgazer.isReady() || 
+      document.getElementById('webgazerFaceFeedbackBox') === null ||
+      document.getElementById('webgazerVideoFeed') === null;
+    
+    // *webcamWarning* updates
+    if (t >= 0.0 && webcamWarning.status === PsychoJS.Status.NOT_STARTED) {
+      // keep track of start time/frame for later
+      webcamWarning.tStart = t;  // (not accounting for frame time here)
+      webcamWarning.frameNStart = frameN;  // exact frame index
+      
+      webcamWarning.setAutoDraw(true);
+    }
+
+    // check for quit (typically the Esc key)
+    if (psychoJS.experiment.experimentEnded || psychoJS.eventManager.getKeys({keyList:['escape']}).length > 0) {
+      return quitPsychoJS('The [Escape] key was pressed. Goodbye!', false);
+    }
+    
+    // check if the Routine should terminate
+    if (!continueRoutine) {  // a component has requested a forced-end of Routine
+      return Scheduler.Event.NEXT;
+    }
+    
+    continueRoutine = false;  // reverts to True if at least one component still running
+    for (const thisComponent of initializeEyetrackingComponents)
+      if ('status' in thisComponent && thisComponent.status !== PsychoJS.Status.FINISHED) {
+        continueRoutine = true;
+        break;
+      }
+    
+    // refresh the screen if continuing
+    if (continueRoutine) {
+      return Scheduler.Event.FLIP_REPEAT;
+    } else {
+      return Scheduler.Event.NEXT;
+    }
+  };
+}
+
+
+function initializeEyetrackingRoutineEnd() {
+  return async function () {
+    //------Ending Routine 'initializeEyetracking'-------
+    for (const thisComponent of initializeEyetrackingComponents) {
+      if (typeof thisComponent.setAutoDraw === 'function') {
+        thisComponent.setAutoDraw(false);
+      }
+    }
+    
+    // Start gaze data logging now that eye tracking is initialized
+    if (window.webgazer && typeof startGazeLogging === 'function') {
+      console.log('Starting gaze logging after eye tracking initialization');
+      startGazeLogging();
+    } else {
+      console.warn('Could not start gaze logging - WebGazer not initialized or startGazeLogging not available');
+    }
+    
+    // the Routine "initializeEyetracking" was not non-slip safe, so reset the non-slip timer
+    routineTimer.reset();
+    
+    return Scheduler.Event.NEXT;
+  };
+}
+
+
+var _inst1_resp_allKeys;
+var inst1Components;
+function inst1RoutineBegin(snapshot) {
+  return async function () {
+    TrialHandler.fromSnapshot(snapshot); // ensure that .thisN vals are up to date
+    
+    //------Prepare to start Routine 'inst1'-------
+    t = 0;
+    inst1Clock.reset(); // clock
+    frameN = -1;
+    continueRoutine = true; // until we're told otherwise
+    // update component parameters for each repeat
+    document.getElementById('webgazerFaceFeedbackBox').style.display = 'none';
+    document.getElementById('webgazerVideoFeed').style.display = 'none';
+    inst1_resp.keys = undefined;
+    inst1_resp.rt = undefined;
+    _inst1_resp_allKeys = [];
+    // keep track of which components have finished
+    inst1Components = [];
+    inst1Components.push(instruction1Txt);
+    inst1Components.push(inst1_resp);
+    
+    for (const thisComponent of inst1Components)
+      if ('status' in thisComponent)
+        thisComponent.status = PsychoJS.Status.NOT_STARTED;
+    return Scheduler.Event.NEXT;
+  }
+}
+
+
+function inst1RoutineEachFrame() {
+  return async function () {
+    //------Loop for each frame of Routine 'inst1'-------
+    // get current time
+    t = inst1Clock.getTime();
+    frameN = frameN + 1;// number of completed frames (so 0 is the first frame)
+    // update/draw components on each frame
+    
+    // *instruction1Txt* updates
+    if (t >= 0.0 && instruction1Txt.status === PsychoJS.Status.NOT_STARTED) {
+      // keep track of start time/frame for later
+      instruction1Txt.tStart = t;  // (not accounting for frame time here)
+      instruction1Txt.frameNStart = frameN;  // exact frame index
+      
+      instruction1Txt.setAutoDraw(true);
+    }
+
+    
+    // *inst1_resp* updates
+    if (t >= 0.0 && inst1_resp.status === PsychoJS.Status.NOT_STARTED) {
+      // keep track of start time/frame for later
+      inst1_resp.tStart = t;  // (not accounting for frame time here)
+      inst1_resp.frameNStart = frameN;  // exact frame index
+      
+      // keyboard checking is just starting
+      psychoJS.window.callOnFlip(function() { inst1_resp.clock.reset(); });  // t=0 on next screen flip
+      psychoJS.window.callOnFlip(function() { inst1_resp.start(); }); // start on screen flip
+      psychoJS.window.callOnFlip(function() { inst1_resp.clearEvents(); });
+    }
+
+    if (inst1_resp.status === PsychoJS.Status.STARTED) {
+      let theseKeys = inst1_resp.getKeys({keyList: ['space'], waitRelease: false});
+      _inst1_resp_allKeys = _inst1_resp_allKeys.concat(theseKeys);
+      if (_inst1_resp_allKeys.length > 0) {
+        inst1_resp.keys = _inst1_resp_allKeys[_inst1_resp_allKeys.length - 1].name;  // just the last key pressed
+        inst1_resp.rt = _inst1_resp_allKeys[_inst1_resp_allKeys.length - 1].rt;
+        // a response ends the routine
+        continueRoutine = false;
+      }
+    }
+    
+    // check for quit (typically the Esc key)
+    if (psychoJS.experiment.experimentEnded || psychoJS.eventManager.getKeys({keyList:['escape']}).length > 0) {
+      return quitPsychoJS('The [Escape] key was pressed. Goodbye!', false);
+    }
+    
+    // check if the Routine should terminate
+    if (!continueRoutine) {  // a component has requested a forced-end of Routine
+      return Scheduler.Event.NEXT;
+    }
+    
+    continueRoutine = false;  // reverts to True if at least one component still running
+    // Return a scheduler event to continue
+    return Scheduler.Event.NEXT;
+  };
+}
