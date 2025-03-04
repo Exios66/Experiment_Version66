@@ -1385,11 +1385,197 @@ function endLoopIteration(scheduler, snapshot) {
 
 function importConditions(currentLoop) {
   return async function () {
-    psychoJS.importAttributes(currentLoop.getCurrentTrial());
+    const currentTrial = currentLoop.getCurrentTrial();
+    psychoJS.importAttributes(currentTrial);
+    
+    // Map the CSV column names to the variable names used in the code
+    if (typeof currentTrial.Calibrate_X !== 'undefined') {
+      window.calibration_x = currentTrial.Calibrate_X;
+    }
+    
+    if (typeof currentTrial.Calibrate_Y !== 'undefined') {
+      window.calibration_y = currentTrial.Calibrate_Y;
+    }
+    
     return Scheduler.Event.NEXT;
-    };
+  };
 }
 
+
+// Global array to store all gaze data
+window.allGazeData = [];
+
+// Function to start logging gaze coordinates
+function startGazeLogging() {
+  if (window.webgazer && typeof window.webgazer.setGazeListener === 'function') {
+    console.log('Setting up gaze logging');
+    
+    // Create a secondary window for gaze data visualization
+    const debugWidth = 400;
+    const debugHeight = 600;
+    const windowFeatures = `width=${debugWidth},height=${debugHeight},resizable,scrollbars=yes`;
+    window.gazeDebugWindow = window.open('', 'WebGazer Debug', windowFeatures);
+    
+    if (window.gazeDebugWindow) {
+      // Initialize the debug window with HTML structure
+      window.gazeDebugWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>WebGazer Gaze Data Log</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 0; padding: 10px; }
+            h2 { margin-top: 0; }
+            #stats { margin-bottom: 15px; padding: 10px; background: #f0f0f0; }
+            #log { 
+              height: 400px; 
+              overflow: auto; 
+              border: 1px solid #ccc; 
+              padding: 10px;
+              font-family: monospace;
+              font-size: 12px;
+            }
+            #controls { margin-top: 15px; }
+            button { padding: 5px 10px; margin-right: 5px; }
+            #visualization {
+              border: 1px solid #ccc;
+              background: #f9f9f9;
+              position: relative;
+              height: 200px;
+              margin-top: 15px;
+            }
+            .point {
+              position: absolute;
+              width: 4px;
+              height: 4px;
+              background: red;
+              border-radius: 50%;
+            }
+          </style>
+        </head>
+        <body>
+          <h2>WebGazer Gaze Data Log</h2>
+          <div id="stats">
+            Total points: <span id="pointCount">0</span><br>
+            Last coordinates: <span id="lastCoords">None</span>
+          </div>
+          <div id="visualization"></div>
+          <div id="controls">
+            <button id="exportBtn">Export Data (CSV)</button>
+            <button id="clearBtn">Clear Log</button>
+          </div>
+          <h3>Recent Data Points:</h3>
+          <div id="log"></div>
+          
+          <script>
+            // Setup event handlers
+            document.getElementById('exportBtn').addEventListener('click', function() {
+              const csvContent = "data:text/csv;charset=utf-8," + 
+                "timestamp,x,y\\n" + 
+                window.opener.allGazeData.map(p => p.timestamp + "," + p.x + "," + p.y).join("\\n");
+              
+              const encodedUri = encodeURI(csvContent);
+              const link = document.createElement("a");
+              link.setAttribute("href", encodedUri);
+              link.setAttribute("download", "gaze_data_" + new Date().toISOString() + ".csv");
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+            });
+            
+            document.getElementById('clearBtn').addEventListener('click', function() {
+              document.getElementById('log').innerHTML = "";
+              document.getElementById('visualization').innerHTML = "";
+              document.getElementById('pointCount').textContent = "0";
+              document.getElementById('lastCoords').textContent = "None";
+            });
+          </script>
+        </body>
+        </html>
+      `);
+      
+      window.gazeDebugWindow.document.close();
+    }
+    
+    // Set up the gaze listener to collect data
+    window.webgazer.setGazeListener(function(data, elapsedTime) {
+      if (data == null) {
+        return;
+      }
+      
+      // Store the data point with timestamp
+      const dataPoint = {
+        timestamp: new Date().getTime(),
+        x: data.x,
+        y: data.y,
+        elapsedTime: elapsedTime
+      };
+      
+      // Add to our global array
+      window.allGazeData.push(dataPoint);
+      
+      // Log to console periodically (every 20 points to avoid flooding)
+      if (window.allGazeData.length % 20 === 0) {
+        console.log(`Gaze data point collected: [${dataPoint.x.toFixed(2)}, ${dataPoint.y.toFixed(2)}] - Total: ${window.allGazeData.length}`);
+      }
+      
+      // Update the debug window if it exists and is open
+      if (window.gazeDebugWindow && !window.gazeDebugWindow.closed) {
+        try {
+          const logElem = window.gazeDebugWindow.document.getElementById('log');
+          const statsElem = window.gazeDebugWindow.document.getElementById('pointCount');
+          const lastCoordsElem = window.gazeDebugWindow.document.getElementById('lastCoords');
+          const vizElem = window.gazeDebugWindow.document.getElementById('visualization');
+          
+          if (logElem && statsElem && lastCoordsElem) {
+            // Update stats
+            statsElem.textContent = window.allGazeData.length;
+            lastCoordsElem.textContent = `x: ${dataPoint.x.toFixed(2)}, y: ${dataPoint.y.toFixed(2)}`;
+            
+            // Add to log (limiting to last 100 entries)
+            const entry = document.createElement('div');
+            entry.textContent = `[${new Date(dataPoint.timestamp).toLocaleTimeString()}] x: ${dataPoint.x.toFixed(2)}, y: ${dataPoint.y.toFixed(2)}`;
+            logElem.appendChild(entry);
+            
+            // Keep only last 100 entries to prevent browser slowdown
+            while (logElem.childNodes.length > 100) {
+              logElem.removeChild(logElem.firstChild);
+            }
+            
+            // Scroll to bottom
+            logElem.scrollTop = logElem.scrollHeight;
+            
+            // Add point to visualization (every 5th point to avoid clutter)
+            if (window.allGazeData.length % 5 === 0 && vizElem) {
+              const point = document.createElement('div');
+              point.className = 'point';
+              // Normalize to visualization area (assuming 1920x1080 screen)
+              const vizWidth = vizElem.offsetWidth;
+              const vizHeight = vizElem.offsetHeight;
+              const normalizedX = (dataPoint.x / 1920) * vizWidth;
+              const normalizedY = (dataPoint.y / 1080) * vizHeight;
+              
+              point.style.left = `${normalizedX}px`;
+              point.style.top = `${normalizedY}px`;
+              vizElem.appendChild(point);
+              
+              // Limit visualization points
+              while (vizElem.childNodes.length > 200) {
+                vizElem.removeChild(vizElem.firstChild);
+              }
+            }
+          }
+        } catch (e) {
+          console.error('Error updating gaze debug window:', e);
+        }
+      }
+    });
+    
+    console.log('Gaze logging initialized successfully');
+  } else {
+    console.error('WebGazer not available or setGazeListener method not found');
+  }
+}
 
 async function quitPsychoJS(message, isCompleted) {
   // Check for and save orphaned data
@@ -1399,41 +1585,38 @@ async function quitPsychoJS(message, isCompleted) {
   
   // Stop eye tracking and save final data
   if (window.webgazer) {
-    // Add final eye tracking metrics to experiment data
-    psychoJS.experiment.addData('finalCalibrationScore', window.webgazer.getTracker().getStoredPoints().length);
-    
-    // Export all collected gaze data
-    const gazeData = {
-      timestamps: window.webgazer.getStoredPoints().map(p => p.timestamp),
-      xPositions: window.webgazer.getStoredPoints().map(p => p.x),
-      yPositions: window.webgazer.getStoredPoints().map(p => p.y),
-      eyeFeatures: window.webgazer.getStoredPoints().map(p => p.eyeFeatures)
-    };
-    
-    // Add all collected gaze data to experiment data
-    psychoJS.experiment.addData('completeGazeData', JSON.stringify(gazeData));
-    
-    // Also save the master gaze data if available
-    if (window.masterGazeData && window.masterGazeData.length > 0) {
-      psychoJS.experiment.addData('masterGazeData', JSON.stringify(window.masterGazeData));
-      console.log(`Saved complete master gaze data with ${window.masterGazeData.length} points`);
+    try {
+      // Add final eye tracking metrics to experiment data
+      // Check if getStoredPoints is available on webgazer directly
+      if (typeof window.webgazer.getStoredPoints === 'function') {
+        const storedPoints = window.webgazer.getStoredPoints();
+        psychoJS.experiment.addData('finalCalibrationScore', storedPoints.length);
+        
+        // Export all collected gaze data
+        const gazeData = {
+          timestamps: storedPoints.map(p => p.timestamp),
+          xPositions: storedPoints.map(p => p.x),
+          yPositions: storedPoints.map(p => p.y),
+          eyeFeatures: storedPoints.map(p => p.eyeFeatures)
+        };
+        
+        console.log('Saving gaze data...', gazeData);
+        
+        // Add data to PsychoJS experiment
+        psychoJS.experiment.addData('gazeData', JSON.stringify(gazeData));
+      } else {
+        // If getStoredPoints is not available, log a warning
+        console.warn('WebGazer getStoredPoints method not available - skipping gaze data export');
+      }
+      
+      // Pause webgazer
+      if (typeof window.webgazer.pause === 'function') {
+        window.webgazer.pause();
+      }
+      
+    } catch (err) {
+      console.error('Error saving WebGazer data:', err);
     }
-    
-    // Calculate and store summary statistics
-    const xMean = gazeData.xPositions.reduce((a, b) => a + b, 0) / gazeData.xPositions.length;
-    const yMean = gazeData.yPositions.reduce((a, b) => a + b, 0) / gazeData.yPositions.length;
-    psychoJS.experiment.addData('meanGazeX', xMean);
-    psychoJS.experiment.addData('meanGazeY', yMean);
-    
-    // Clean up timers
-    if (window.gazeExportTimer) {
-      clearInterval(window.gazeExportTimer);
-      console.log('Cleared gaze export timer');
-    }
-    
-    // Properly end webgazer session
-    window.webgazer.end();
-    console.log('Eye tracking session ended and data saved');
   }
   
   // Force data to be saved to server before closing
@@ -1444,9 +1627,56 @@ async function quitPsychoJS(message, isCompleted) {
     console.error('Failed to save experiment data:', error);
   }
   
-  // Clean up and close window
-  psychoJS.window.close();
+  // End the experiment
   psychoJS.quit({message: message, isCompleted: isCompleted});
   
+  // Additional cleanup for WebGazer if needed
+  if (window.webgazer) {
+    try {
+      if (typeof window.webgazer.end === 'function') {
+        window.webgazer.end();
+        console.log('WebGazer session ended properly');
+      }
+    } catch (err) {
+      console.error('Error ending WebGazer:', err);
+    }
+  }
+  
   return Scheduler.Event.QUIT;
+}
+
+// Initialize eye tracking
+async function initializeWebGazer() {
+  // Add WebGazer.js  
+  if (window.webgazer) {
+    console.log('WebGazer already loaded, initializing...');
+    try {
+      console.log('Starting WebGazer...');
+      // Set up WebGazer
+      await window.webgazer.setRegression('ridge')
+        .setTracker('TFFacemesh')
+        .setGazeListener(function(data, timestamp) {
+          // This is just a placeholder - our detailed listener will be set up later
+          if (data == null) return;
+          
+          // Store eye gaze position
+          window.currentGazeX = data.x;
+          window.currentGazeY = data.y;
+        })
+        .begin();
+      
+      // Start the robust fallback data logging system
+      startGazeLogging();
+      
+      console.log('WebGazer initialized successfully');
+      return true;
+    } catch (err) {
+      console.error('Failed to initialize WebGazer:', err);
+      alert('Eye tracking failed to initialize: ' + err.message);
+      return false;
+    }
+  } else {
+    console.error('WebGazer not found. Make sure webgazer.js is loaded correctly.');
+    return false;
+  }
 }
