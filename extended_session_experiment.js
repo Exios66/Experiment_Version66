@@ -707,6 +707,7 @@ function calibrationIntroRoutineEachFrame() {
         }
       }
     }
+    
     // check for quit (typically the Esc key)
     if (psychoJS.experiment.experimentEnded || psychoJS.eventManager.getKeys({keyList:['escape']}).length > 0) {
       return quitPsychoJS('The [Escape] key was pressed. Goodbye!', false);
@@ -770,7 +771,7 @@ function trialsLoopBegin(trialsLoopScheduler, snapshot) {
       psychoJS: psychoJS,
       nReps: 1, method: TrialHandler.Method.RANDOM,
       extraInfo: expInfo, originPath: undefined,
-      trialList: 'calibration_trials.xlsx',
+      trialList: 'calibration_trials.csv',
       seed: undefined, name: 'trials'
     });
     psychoJS.experiment.addLoop(trials); // add the loop to the experiment
@@ -948,7 +949,7 @@ function calibrationRoutineEachFrame() {
     frameRemains = 0.5 + 3 - psychoJS.window.monitorFramePeriod * 0.75;  // most of one frame period left
     if (calibrationClick.status === PsychoJS.Status.STARTED && t >= frameRemains) {
       calibrationClick.status = PsychoJS.Status.FINISHED;
-  }
+    }
     if (calibrationClick.status === PsychoJS.Status.STARTED) {  // only update if started and not finished!
       _mouseButtons = calibrationClick.getPressed();
       if (!_mouseButtons.every( (e,i,) => (e == prevButtonState[i]) )) { // button state changed?
@@ -967,6 +968,7 @@ function calibrationRoutineEachFrame() {
         }
       }
     }
+    
     // check for quit (typically the Esc key)
     if (psychoJS.experiment.experimentEnded || psychoJS.eventManager.getKeys({keyList:['escape']}).length > 0) {
       return quitPsychoJS('The [Escape] key was pressed. Goodbye!', false);
