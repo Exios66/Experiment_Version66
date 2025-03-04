@@ -1,0 +1,558 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width">
+    <title>Extended Session [PsychoJS]</title>
+    <!-- styles -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/jquery-ui-dist@1.12.1/jquery-ui.min.css">
+    <link rel="stylesheet" href="./lib/psychojs-2021.2.3.css">
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="../eye-favicon.svg">
+    <link rel="icon" type="image/x-icon" href="data:image/x-icon;base64,AAABAAEAEBAAAAEAIABoBAAAFgAAACgAAAAQAAAAIAAAAAEAIAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGBgYAhgYGAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYGBgCP///xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABgYGAI////EAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYGBGCP///xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABgYGAI////EAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGBgYAj///8QAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYGBgCP///xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABgYGAI////EAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGBgYAj///8QAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYGBgCP///xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABgYGAI////EAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==">
+    
+    <!-- Page initialization and error handling -->
+    <script>
+      // Debug logging
+      const debugLog = [];
+      function addDebugMessage(message) {
+        const timestamp = new Date().toLocaleTimeString();
+        const entry = `[${timestamp}] ${message}`;
+        debugLog.push(entry);
+        console.log(entry);
+        
+        // Update debug panel if it exists
+        const debugPanel = document.getElementById('debug-panel');
+        if (debugPanel) {
+          debugPanel.textContent = debugLog.join('\n');
+          debugPanel.scrollTop = debugPanel.scrollHeight;
+        }
+      }
+
+      // Error display
+      function showError(message, details) {
+        console.error(message, details);
+        
+        // Add to debug log
+        addDebugMessage(`ERROR: ${message}`);
+        
+        // Create error panel if it doesn't exist
+        let errorPanel = document.getElementById('error-panel');
+        if (!errorPanel) {
+          errorPanel = document.createElement('div');
+          errorPanel.id = 'error-panel';
+          errorPanel.style = 'position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(255,0,0,0.9); color: white; padding: 15px; border-radius: 5px; font-family: sans-serif; z-index: 9999; max-width: 80%; box-shadow: 0 4px 8px rgba(0,0,0,0.2);';
+          document.body.appendChild(errorPanel);
+        }
+        
+        errorPanel.innerHTML = `
+          <h3 style="margin-top: 0;">Error</h3>
+          <p>${message}</p>
+          ${details ? `<pre style="background: rgba(0,0,0,0.3); padding: 8px; overflow: auto; max-height: 200px; font-size: 12px;">${details}</pre>` : ''}
+          <button onclick="this.parentNode.style.display='none';" style="background: white; color: red; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; margin-top: 10px;">Dismiss</button>
+        `;
+      }
+      
+      // Global error handler
+      window.addEventListener('error', function(e) {
+        showError(`JavaScript Error: ${e.message}`, e.error ? e.error.stack : null);
+        
+        // Special handling for resource loading errors
+        if (e.message.includes('404') || e.message.includes('Failed to load resource')) {
+          console.error('Resource failed to load:', e.target.src || e.target.href);
+          document.getElementById('root').innerHTML = '<div style="color: red; margin: 20px; font-family: sans-serif;">' +
+            '<h1>Error Loading Resources</h1>' +
+            '<p>Failed to load: ' + (e.target.src || e.target.href) + '</p>' +
+            '<p>Please check that all files are present in the correct location.</p>' +
+            '</div>';
+        }
+      }, true);
+      
+      // Handle unhandled promise rejections
+      window.addEventListener('unhandledrejection', function(e) {
+        showError(`Unhandled Promise rejection: ${e.reason}`, e.reason.stack);
+        addDebugMessage('UNHANDLED PROMISE REJECTION: ' + e.reason);
+      });
+      
+      // Initialize page
+      addDebugMessage('Page loaded and debug logging initialized');
+    </script>
+    
+    <!-- JavaScript module detector (load before any other scripts) -->
+    <script>
+      // Helper function to check for ES6 import/export statements in text content
+      window.hasImportExport = function(text) {
+        if (!text || typeof text !== 'string') return false;
+        
+        // Improved regex to detect import/export statements - more thorough
+        const importExportRegex = /\b(import|export)\b.*?[;{]/;
+        const fromRegex = /\bfrom\s+['"][^'"]+['"]/;
+        
+        return importExportRegex.test(text) || fromRegex.test(text);
+      };
+      
+      // Initialize module script tracking with commonly known module files
+      window.moduleScripts = [
+        'extended_session_experiment.js',
+        'module-wrapper.js',
+        'extended_session_experiment-module-wrapper.js',
+        'psychojs-2021.2.3.js',  // Add PsychoJS to detected modules
+        'webgazer-module.js'     // Add any other potential modules
+      ];
+      
+      // Function to detect if a script is a module
+      window.isModuleScript = function(url) {
+        if (!url) return false;
+        
+        // Improved detection to catch more patterns
+        const hasModuleExt = url.endsWith('.mjs');
+        const isKnownModule = window.moduleScripts.some(module => url.includes(module));
+        const hasModuleParam = url.includes('?module') || url.includes('&module');
+        
+        return hasModuleExt || isKnownModule || hasModuleParam;
+      };
+      
+      // Setup FetchHook for module detection
+      window.originalFetch = window.fetch;
+      window.fetch = function(url, options) {
+        const promise = window.originalFetch(url, options);
+        
+        // If it's a JavaScript file, check if it's a module
+        if (url && typeof url === 'string' && url.endsWith('.js') && !window.isModuleScript(url)) {
+          promise.then(response => {
+            if (!response.ok) return response;
+            
+            const clonedResponse = response.clone();
+            clonedResponse.text().then(text => {
+              if (window.hasImportExport(text)) {
+                addDebugMessage(`Detected module from content: ${url}`);
+                window.moduleScripts.push(url);
+              }
+            }).catch(err => {
+              console.warn('Error checking module content:', err);
+            });
+            
+            return response;
+          });
+        }
+        
+        return promise;
+      };
+      
+      addDebugMessage('Module detection system initialized');
+    </script>
+    
+    <!-- External libraries - load first to ensure availability -->
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jquery-ui-dist@1.12.1/jquery-ui.min.js"></script>
+    
+    <!-- PreloadJS patch - before loading PreloadJS -->
+    <script>
+      // Create a proxy object to intercept CreateJS initialization
+      window.createjsProxyHandler = {
+        LoadQueue: null,
+        appendToHead: null,
+        loadJavascript: null
+      };
+      
+      // Store the original window.createjs
+      window.originalCreateJS = window.createjs;
+      
+      // Function to patch CreateJS when it's loaded
+      function patchCreateJS(createjsObj) {
+        if (!createjsObj || window.createjsPatched) return;
+        
+        addDebugMessage('Patching CreateJS/PreloadJS');
+        
+        // Prevent infinite recursion by marking as patched
+        window.createjsPatched = true;
+        
+        // Make sure LoadQueue exists
+        if (createjsObj.LoadQueue) {
+          try {
+            // Store originals for reference
+            window.createjsProxyHandler.LoadQueue = createjsObj.LoadQueue;
+            
+            // Patch the _loadJavascript method in the LoadQueue's prototype chain
+            const originalLoadJavascript = createjsObj.LoadQueue.prototype._loadJavascript;
+            window.createjsProxyHandler.loadJavascript = originalLoadJavascript;
+            
+            createjsObj.LoadQueue.prototype._loadJavascript = function(item) {
+              // Check if the item is a module
+              if (item && item.src && window.isModuleScript(item.src)) {
+                addDebugMessage(`CreateJS loading module: ${item.src}`);
+                
+                // Use module-wrapper if it's the main experiment file
+                if (item.src.includes('extended_session_experiment.js')) {
+                  addDebugMessage('Redirecting to module wrapper');
+                  item.src = './modules/extended_session_experiment-module-wrapper.js';
+                }
+                
+                // Create a module script element
+                const script = document.createElement('script');
+                script.type = 'module';
+                script.src = item.src;
+                
+                // Handle load events
+                script.onload = function() {
+                  if (item.completeHandler) {
+                    item.completeHandler();
+                  }
+                };
+                
+                // Handle error events
+                script.onerror = function(event) {
+                  if (item.errorHandler) {
+                    item.errorHandler(event);
+                  }
+                };
+                
+                // Directly append to document to bypass PreloadJS's appendToHead
+                document.head.appendChild(script);
+                return true;
+              }
+              
+              // For non-module scripts, use the original method
+              return originalLoadJavascript.call(this, item);
+            };
+            
+            // Search for the appendToHead method in createjs's objects and replace it
+            for (const prop in createjsObj) {
+              if (typeof createjsObj[prop] === 'object' && createjsObj[prop] !== null) {
+                if (typeof createjsObj[prop].appendToHead === 'function') {
+                  addDebugMessage(`Found appendToHead in createjs.${prop}`);
+                  
+                  // Get direct reference to the actual function object to prevent chain issues
+                  const origAppendFn = createjsObj[prop].appendToHead;
+                  
+                  // Create a completely new function to avoid any shared prototype/context issues
+                  // This ensures no recursive calls can happen
+                  createjsObj[prop].appendToHead = function(parent, elem, before) {
+                    // Check if this is a script being appended
+                    if (elem && elem.tagName === 'SCRIPT') {
+                      const src = elem.src || '';
+                      
+                      // If it's a module script that doesn't have type="module"
+                      if (window.isModuleScript(src) && elem.type !== 'module') {
+                        addDebugMessage(`Processing module script: ${src}`);
+                        
+                        // Rather than modifying the element, directly add it to document ourselves
+                        const moduleScript = document.createElement('script');
+                        moduleScript.type = 'module';
+                        moduleScript.src = elem.src;
+                        
+                        // Copy event handlers
+                        if (elem.onload) moduleScript.onload = elem.onload;
+                        if (elem.onerror) moduleScript.onerror = elem.onerror;
+                        
+                        // Add to document directly
+                        document.head.appendChild(moduleScript);
+                        
+                        // Return immediately to prevent appendToHead from running
+                        return;
+                      }
+                    }
+                    
+                    // Fall back to native DOM for direct appendChild to prevent further patching issues
+                    if (parent && elem) {
+                      if (before) {
+                        parent.insertBefore(elem, before);
+                      } else {
+                        parent.appendChild(elem);
+                      }
+                      return;
+                    }
+                  };
+                  
+                  break;
+                }
+              }
+            }
+            
+            addDebugMessage('CreateJS patched successfully');
+          } catch (error) {
+            console.error('Error patching CreateJS:', error);
+            addDebugMessage(`ERROR patching CreateJS: ${error.message}`);
+          }
+        }
+      }
+      
+      // Set up to intercept createjs when it's assigned
+      Object.defineProperty(window, 'createjs', {
+        configurable: true,
+        set: function(value) {
+          // Store the real createjs
+          window.originalCreateJS = value;
+          
+          // Patch it before making it available
+          setTimeout(function() {
+            addDebugMessage('Intercepted CreateJS initialization');
+            patchCreateJS(value);
+          }, 0);
+          
+          // Update the property without triggering the setter
+          Object.defineProperty(window, 'createjs', {
+            configurable: true,
+            writable: true,
+            value: value
+          });
+        },
+        get: function() {
+          return window.originalCreateJS;
+        }
+      });
+    </script>
+    
+    <!-- Now load PreloadJS -->
+    <script src="https://cdn.jsdelivr.net/npm/preloadjs@1.0.1/lib/preloadjs.min.js"></script>
+    
+    <!-- PsychoJS configuration - init early to ensure it's available -->
+    <script>
+      window.psychoJS = {
+        debug: true,
+        collectIP: false,
+        hosts: {
+          local: '',
+          pavlovia: 'https://pavlovia.org'
+        },
+        log: function() {
+          if (window.psychoJS.debug) {
+            console.log.apply(console, arguments);
+          }
+        },
+        version: '2021.2.3'
+      };
+      
+      addDebugMessage('PsychoJS stub initialized');
+      
+      // AudioContext handling for warnings
+      window.fixAudioContext = function() {
+        // Find any AudioContext instances that might exist
+        if (typeof window.AudioContext !== 'undefined' || typeof window.webkitAudioContext !== 'undefined') {
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          
+          // Patch the AudioContext prototype
+          const originalConstructor = AudioContextClass;
+          window.AudioContext = window.webkitAudioContext = function() {
+            const instance = new originalConstructor();
+            
+            // Automatically resume on user interaction
+            const resumeAudio = function() {
+              if (instance.state !== 'running') {
+                instance.resume().then(function() {
+                  console.log('AudioContext resumed successfully');
+                }).catch(function(err) {
+                  console.warn('Failed to resume AudioContext:', err);
+                });
+              }
+            };
+            
+            // Add listeners for user interactions
+            document.addEventListener('click', resumeAudio, { once: true });
+            document.addEventListener('touchstart', resumeAudio, { once: true });
+            document.addEventListener('keydown', resumeAudio, { once: true });
+            
+            return instance;
+          };
+          
+          // Copy prototype properties
+          window.AudioContext.prototype = originalConstructor.prototype;
+          if (window.webkitAudioContext) {
+            window.webkitAudioContext.prototype = originalConstructor.prototype;
+          }
+          
+          console.log('AudioContext patched to auto-resume on user interaction');
+        }
+      };
+      
+      // Apply the fix when the page loads
+      document.addEventListener('DOMContentLoaded', function() {
+        window.fixAudioContext();
+      });
+    </script>
+    
+    <!-- WebGazer eye tracking library -->
+    <script>
+      // Handle WebGazer initialization properly to avoid duplicate registrations
+      window.webgazerInitialized = false;
+      
+      function initializeWebGazer() {
+        if (window.webgazerInitialized) {
+          console.log('WebGazer already initialized, skipping');
+          return;
+        }
+        
+        console.log('Initializing WebGazer eye tracking');
+        
+        // Create a script element
+        const script = document.createElement('script');
+        script.src = './lib/webgazer-2.0.1.js';
+        
+        script.onload = function() {
+          console.log('WebGazer loaded successfully');
+          window.webgazerInitialized = true;
+          
+          // Prevent multiple initializations
+          if (window.webgazer && typeof window.webgazer.begin === 'function') {
+            // Don't auto-start WebGazer - let the experiment control it
+            console.log('WebGazer ready to be used by experiment');
+            
+            // Patch WebGazer to use willReadFrequently attribute for better performance
+            patchWebGazerCanvasReading();
+          }
+        };
+        
+        script.onerror = function() {
+          console.error('Failed to load WebGazer from primary file, trying alternate...');
+          const altScript = document.createElement('script');
+          altScript.src = './lib/webgazer-2.0.1.tp.js';
+          
+          altScript.onload = function() {
+            console.log('Alternate WebGazer loaded successfully');
+            window.webgazerInitialized = true;
+            
+            // Also patch the alternate version
+            if (window.webgazer) {
+              patchWebGazerCanvasReading();
+            }
+          };
+          
+          altScript.onerror = function() {
+            console.error('WebGazer not available - eye tracking will not be used');
+            document.getElementById('root').innerHTML += '<div style="color: red; padding: 10px; border: 1px solid red; margin: 10px; font-family: sans-serif;"><h3>WebGazer Failed to Load</h3><p>The eye tracking library could not be loaded. The experiment will not function correctly.</p></div>';
+          };
+          
+          document.head.appendChild(altScript);
+        };
+        
+        document.head.appendChild(script);
+      }
+      
+      // Function to patch WebGazer's canvas creation to add willReadFrequently attribute
+      function patchWebGazerCanvasReading() {
+        if (!window.webgazer) return;
+        
+        // Observer to set willReadFrequently on WebGazer canvas elements
+        const observer = new MutationObserver(function(mutations) {
+          mutations.forEach(function(mutation) {
+            if (mutation.addedNodes) {
+              mutation.addedNodes.forEach(function(node) {
+                // Check if the node is a canvas element related to WebGazer
+                if (node.nodeName === 'CANVAS' && 
+                    (node.id && (node.id.includes('webgazer') || node.id.includes('facefeedback')))) {
+                  console.log('Setting willReadFrequently=true on WebGazer canvas:', node.id);
+                  node.setAttribute('willReadFrequently', 'true');
+                }
+                
+                // Also check for child canvas elements
+                if (node.querySelectorAll) {
+                  const canvases = node.querySelectorAll('canvas');
+                  canvases.forEach(function(canvas) {
+                    if (canvas.id && (canvas.id.includes('webgazer') || canvas.id.includes('facefeedback'))) {
+                      console.log('Setting willReadFrequently=true on WebGazer canvas:', canvas.id);
+                      canvas.setAttribute('willReadFrequently', 'true');
+                    }
+                  });
+                }
+              });
+            }
+          });
+        });
+        
+        // Start observing the document
+        observer.observe(document.body, { childList: true, subtree: true });
+        
+        // Also patch the createElement method to set willReadFrequently on new canvases
+        const originalCreateElement = document.createElement;
+        document.createElement = function(tagName) {
+          const element = originalCreateElement.call(document, tagName);
+          if (tagName.toLowerCase() === 'canvas' && window.webgazer) {
+            element.setAttribute('willReadFrequently', 'true');
+          }
+          return element;
+        };
+        
+        console.log('WebGazer canvas patched for better performance with willReadFrequently');
+      }
+      
+      // Initialize WebGazer when the page loads
+      document.addEventListener('DOMContentLoaded', function() {
+        setTimeout(initializeWebGazer, 500); // Slight delay to avoid race conditions
+      });
+    </script>
+    
+    <!-- PsychoJS library -->
+    <script src="./lib/psychojs-2021.2.3.js" type="module" defer></script>
+    
+    <!-- Module wrapper for experiment -->
+    <script type="module">
+      // Directly import PsychoJS as an ES module
+      import { core, data, sound, util, visual } from './lib/psychojs-2021.2.3.js';
+      
+      // Store in a global location for non-module scripts
+      window.psychoJSModule = { core, data, sound, util, visual };
+      
+      // Also expose modules globally to avoid "core is not defined" errors
+      window.core = core;
+      window.data = data;
+      window.sound = sound;
+      window.util = util;
+      window.visual = visual;
+      
+      // Explicitly set PsychoJS class globally
+      window.PsychoJS = core.PsychoJS;
+      
+      // Log success
+      addDebugMessage('PsychoJS library imported successfully as ES module');
+      addDebugMessage('PsychoJS modules exposed globally');
+      
+      try {
+        // Register the module import handler
+        window.onExperimentModuleLoaded = function(module) {
+          console.log('Experiment module loaded via dynamic import');
+        };
+        
+        // Import will be handled by the module wrapper
+        const moduleScript = document.createElement('script');
+        moduleScript.type = 'module';
+        moduleScript.src = './modules/extended_session_experiment-module-wrapper.js';
+        document.head.appendChild(moduleScript);
+        
+        // Add a safety check in case the module wrapper fails
+        setTimeout(() => {
+          if (!window.experimentModuleLoaded && !window.core) {
+            console.warn('Safety check failed - core module not globally available');
+            addDebugMessage('WARNING: Safety check failed - redefining core modules');
+            
+            // Re-expose the modules
+            window.core = core;
+            window.data = data;
+            window.sound = sound;
+            window.util = util;
+            window.visual = visual;
+            window.PsychoJS = core.PsychoJS;
+          }
+        }, 2000);
+      } catch (e) {
+        console.error('Error loading experiment module:', e);
+        addDebugMessage('ERROR: Failed to load experiment module: ' + e.message);
+      }
+    </script>
+    
+    <!-- Create the experiment root element -->
+    <div id="root"></div>
+    
+    <!-- Debug panel (hidden by default) -->
+    <div id="debug-panel" style="display: none; position: fixed; bottom: 0; left: 0; width: 100%; height: 200px; background: rgba(0,0,0,0.7); color: #0f0; font-family: monospace; padding: 10px; overflow: auto; z-index: 9999;"></div>
+    
+    <!-- Toggle button for debug panel -->
+    <button id="debug-toggle" style="position: fixed; bottom: 10px; right: 10px; z-index: 10000; padding: 5px; background: #333; color: white; border: none; cursor: pointer; opacity: 0.5;" onclick="
+      const panel = document.getElementById('debug-panel');
+      panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+      this.innerText = panel.style.display === 'none' ? 'Show Debug' : 'Hide Debug';
+    ">Show Debug</button>
+  </head>
+  <body>
+    <!-- The experiment UI will be created dynamically by PsychoJS -->
+  </body>
+</html>
