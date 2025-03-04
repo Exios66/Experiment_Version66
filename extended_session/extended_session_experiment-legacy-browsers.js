@@ -12,11 +12,29 @@
     // Display a message for legacy browsers
     console.log('Running extended session experiment on legacy browser');
     
-    // Redirect to the main experiment handler
-    if (typeof initializeEyetrackingRoutineBegin === 'function') {
-      console.log('Successfully loaded eye tracking functions');
+    // Check if the main script was loaded
+    if (typeof psychoJS !== 'undefined') {
+      console.log('Successfully loaded PsychoJS');
+      
+      // Create a global error handler for better diagnostics
+      window.addEventListener('error', function(e) {
+        console.error('Runtime error:', e.message);
+        if (document.getElementById('root')) {
+          document.getElementById('root').innerHTML += '<div style="color: red; padding: 10px; border: 1px solid red; margin: 10px; font-family: sans-serif;">' +
+            '<h3>JavaScript Error</h3>' +
+            '<p>' + e.message + '</p>' +
+            '</div>';
+        }
+      });
     } else {
-      console.error('Failed to load eye tracking functions. Please check your browser compatibility.');
+      console.error('Failed to load PsychoJS. Please check if the library is available.');
+      if (document.getElementById('root')) {
+        document.getElementById('root').innerHTML = '<div style="color: red; margin: 20px; font-family: sans-serif;">' +
+          '<h1>Error Loading PsychoJS</h1>' +
+          '<p>The experiment library could not be loaded.</p>' +
+          '<p>Please check that the PsychoJS library is correctly included in your HTML.</p>' +
+          '</div>';
+      }
     }
   });
 })(); 

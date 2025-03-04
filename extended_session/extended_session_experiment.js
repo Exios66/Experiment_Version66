@@ -1,5 +1,19 @@
+/**
+ * This file contains extracted functions from the main experiment.
+ * It's meant to be included alongside the main experiment.js file
+ * for compatibility with certain experiment configurations.
+ * 
+ * Note: Most functionality should be placed in the main experiment.js file.
+ */
+
+// This function is provided for compatibility with older experiment versions
 function initializeEyetrackingRoutineBegin(snapshot) {
   return async function () {
+    if (typeof TrialHandler === 'undefined') {
+      console.error('TrialHandler is not defined. Make sure the main experiment file is loaded first.');
+      return;
+    }
+    
     TrialHandler.fromSnapshot(snapshot); // ensure that .thisN vals are up to date
     
     //------Prepare to start Routine 'initializeEyetracking'-------

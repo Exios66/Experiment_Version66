@@ -12,7 +12,7 @@ const { round } = util;
 
 
 // store info about the experiment session:
-let expName = 'demo_eye_tracking2';  // from the Builder filename that created this script
+let expName = 'extended_session_experiment';  // from the Builder filename that created this script
 let expInfo = {'participant': '', 'session': '001'};
 
 // Start code blocks for 'Before Experiment'
@@ -72,11 +72,12 @@ psychoJS.start({
   expName: expName,
   expInfo: expInfo,
   resources: [
-    {'name': 'calibration_trials.xlsx', 'path': 'calibration_trials.xlsx'},
-    {'name': 'webgazer-2.0.1.js', 'path': 'webgazer-2.0.1.js'},
+    {'name': 'calibration_trials.xlsx', 'path': './calibration_trials.xlsx'},
+    {'name': 'webgazer-2.0.1.js', 'path': './webgazer-2.0.1.js'},
+    {'name': 'webgazer-2.0.1.tp.js', 'path': './webgazer-2.0.1.tp.js'},
     {'name': 'lib/psychojs-2021.2.3.js', 'path': './lib/psychojs-2021.2.3.js'},
     {'name': 'lib/psychojs-2021.2.3.css', 'path': './lib/psychojs-2021.2.3.css'},
-    {'name': 'extended_session/extended_session_experiment.js', 'path': './extended_session/extended_session_experiment.js'}
+    {'name': 'extended_session_experiment.js', 'path': './extended_session_experiment.js'}
   ]
 });
 
@@ -238,8 +239,18 @@ var t;
 var frameN;
 var continueRoutine;
 var initializeEyetrackingComponents;
+/** 
+ * This function initializes the eye tracking component of the experiment
+ * It has been updated to incorporate a simpler version for compatibility with older experiment versions
+ */
 function initializeEyetrackingRoutineBegin(snapshot) {
   return async function () {
+    // Ensure TrialHandler is defined
+    if (typeof TrialHandler === 'undefined') {
+      console.error('TrialHandler is not defined. Make sure the main experiment file is loaded first.');
+      return;
+    }
+    
     TrialHandler.fromSnapshot(snapshot); // ensure that .thisN vals are up to date
     
     //------Prepare to start Routine 'initializeEyetracking'-------
@@ -247,12 +258,29 @@ function initializeEyetrackingRoutineBegin(snapshot) {
     initializeEyetrackingClock.reset(); // clock
     frameN = -1;
     continueRoutine = true; // until we're told otherwise
+    
+    // Ensure WebGazer is properly loaded
+    if (typeof window.webgazer === 'undefined') {
+      console.error('WebGazer is not loaded. Attempting to load it again...');
+      try {
+        // Load WebGazer dynamically if it's not available
+        await psychoJS.serverManager.prepareResource('webgazer-2.0.1.js');
+        console.log('WebGazer loaded successfully');
+      } catch (error) {
+        console.error('Failed to load WebGazer:', error);
+      }
+    }
+    
     // update component parameters for each repeat
     // Show webcam thumbnail and face feedback box, but not face overlay and gaze dot
-    window.webgazer.params.showVideoPreview = true;
-    window.webgazer.params.showFaceFeedbackBox = true;
-    window.webgazer.params.showFaceOverlay = false;
-    window.webgazer.params.showGazeDot = false
+    if (window.webgazer) {
+      window.webgazer.params.showVideoPreview = true;
+      window.webgazer.params.showFaceFeedbackBox = true;
+      window.webgazer.params.showFaceOverlay = false;
+      window.webgazer.params.showGazeDot = false;
+    } else {
+      console.error('WebGazer is still not available after loading attempt');
+    }
     
     // Configure data collection
     const exportGazeData = () => {
@@ -753,21 +781,35 @@ function calibrationRoutineEachFrame() {
     // returns type error - checking fix 
     
     // Hide webcam thumbnail if eyes are in validation box
-    if (webgazer.checkEyesInValidationBox() === true) {
-      // If last time that eyes were outside of validation box was longer than 
-      // window.eyesReturnedDelay ago, hide thumbnail
-      if (
-        document.getElementById('webgazerFaceFeedbackBox').style.display != 'none' &&
-        (new Date).getTime() > window.eyesExitedTimestamp + window.eyesReturnedDelay
-      ) {   
-        document.getElementById('webgazerFaceFeedbackBox').style.display = 'none';
-        document.getElementById('webgazerVideoFeed').style.display = 'none';
-      }
-    } else {
+    if (window.webgazer && window.webgazer.checkEyesInValidationBox) {
+      // Handle eye position validation
+      const eyesInBox = window.webgazer.checkEyesInValidationBox();
+      
+      if (eyesInBox === true) {
+        // If eyes are in validation box
+        if (
+          document.getElementById('webgazerFaceFeedbackBox').style.display != 'none' &&
+          (new Date).getTime() > window.eyesExitedTimestamp + window.eyesReturnedDelay
+        ) {   
+          // Hide webcam elements after delay
+          if (document.getElementById('webgazerFaceFeedbackBox')) {
+            document.getElementById('webgazerFaceFeedbackBox').style.display = 'none';
+          }
+          if (document.getElementById('webgazerVideoFeed')) {
+            document.getElementById('webgazerVideoFeed').style.display = 'none';
+          }
+          
+          // Record when we hid the webcam
+          psychoJS.experiment.addData('webcamHidden', Date.now());
+        }
+      } else {
         // Eyes outside of validation box; show thumbnail
         window.eyesExitedTimestamp = (new Date).getTime();
         document.getElementById('webgazerFaceFeedbackBox').style.display = 'block';
         document.getElementById('webgazerVideoFeed').style.display = 'block';
+      }
+    } else {
+      console.error('WebGazer is not available');
     }
     
     

@@ -6,53 +6,75 @@ A PsychoJS experiment for eye tracking using WebGazer.js.
 
 This experiment demonstrates eye tracking capabilities in a web browser using the WebGazer.js library integrated with PsychoJS. It includes calibration routines and a simple interactive demo of eye tracking functionality.
 
-## Setup
+## Files and Structure
 
-1. Make sure all files are in their correct locations:
-   - `webgazer-2.0.1.js` - The WebGazer eye tracking library
-   - `calibration_trials.xlsx` - Contains the positions for calibration points
-   - `index.html` - Main HTML file that loads the experiment
-   - `extended_session_experiment.js` - Main experiment script
-   - `extended_session/` - Directory containing components for extended sessions
+The experiment consists of the following main files:
+- `index.html` - The entry point for the experiment
+- `extended_session_experiment.js` - The main experiment script
+- `webgazer-2.0.1.js` - The WebGazer eye tracking library
+- `webgazer-2.0.1.tp.js` - A symbolic link to the WebGazer library (for compatibility)
+- `calibration_trials.xlsx` - Calibration data for the experiment
+- `lib/` - Directory containing PsychoJS library files
 
-2. Required libraries (in the `lib/` directory):
-   - `psychojs-2021.2.3.js`
-   - `psychojs-2021.2.3.css`
-   - `psychojs-2021.2.3.iife.js` (for legacy browsers)
+## Setup Instructions
 
-3. Browser requirements:
-   - Modern web browser with webcam access
-   - Permission to use webcam
-   - JavaScript enabled
+### Running Locally
+1. Ensure all files are present in the correct locations
+2. Start a local web server:
+   ```
+   python -m http.server 8000
+   ```
+3. Open a browser and navigate to `http://localhost:8000`
 
-## Running the Experiment
+### Running on Pavlovia
+1. Upload all files to your Pavlovia repository
+2. Ensure the file structure matches the local setup
+3. Check that WebGazer files are correctly uploaded
+4. Follow standard Pavlovia deployment procedures
 
-1. Serve the files using a web server (required for webcam access)
-2. Open the index.html file in a browser
-3. Follow the on-screen instructions for:
-   - Webcam initialization
-   - Calibration procedure
-   - Eye tracking demo
+## Common Issues and Troubleshooting
 
-## Code Structure
+### 404 Errors
+If you see 404 errors in the console:
+1. Check that all files are present in the correct locations
+2. Verify that `webgazer-2.0.1.js` is accessible
+3. Ensure paths in `index.html` match your file structure
 
-- `index.html` - Entry point for the experiment
-- `extended_session_experiment.js` - Main experiment code
-- `extended_session/extended_session_experiment.js` - Extended functionality for longer sessions
-- `webgazer-2.0.1.js` - WebGazer library for eye tracking
+### WebGazer Initialization Issues
+If the webcam doesn't initialize:
+1. Make sure you're using a secure context (HTTPS or localhost)
+2. Grant camera permissions when prompted
+3. Check browser console for specific error messages
+
+### Path Issues
+If resources don't load correctly:
+1. Check that all paths in `index.html` and `extended_session_experiment.js` are correct
+2. Verify that symbolic links are working properly
+3. Ensure no files are missing or misnamed
+
+## Browser Compatibility
+This experiment works best in:
+- Chrome (latest version)
+- Firefox (latest version)
+- Edge (latest version)
+
+Safari has known issues with WebGazer and may not function correctly.
+
+## Camera Requirements
+- A functional webcam is required
+- Camera permissions must be granted
+- Good, consistent lighting is recommended for best results
 
 ## Data Collection
+Eye tracking data is collected throughout the experiment. The data includes:
+- Eye positions (x, y coordinates)
+- Timestamps
+- Calibration accuracy
 
-This experiment collects and stores:
-- Calibration points and accuracy
-- Gaze position data
-- Response times
-- Webcam status
+## License
+This project is licensed under the terms included in the LICENSE file.
 
-Data is exported in batch format to prevent data loss and ensure comprehensive tracking.
-
-## Troubleshooting
-
-- If webcam doesn't initialize, check browser permissions
-- For 404 errors, ensure all resource files are present in the correct locations
-- If calibration isn't working, try in a well-lit environment with clear face visibility 
+## Acknowledgments
+- WebGazer.js library developed by Brown University
+- PsychoJS framework developed by PsychoPy
+- Additional modifications by Thomas Pronk

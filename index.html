@@ -10,6 +10,19 @@
     <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="./eye-favicon.svg">
     <link rel="icon" type="image/x-icon" href="data:image/x-icon;base64,AAABAAEAEBAAAAEAIABoBAAAFgAAACgAAAAQAAAAIAAAAAEAIAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGBgYAhgYGAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYGBgCP///xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABgYGAI////EAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYGBGCP///xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABgYGAI////EAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGBgYAj///8QAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYGBgCP///xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABgYGAI////EAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGBgYAj///8QAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYGBgCP///xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABgYGAI////EAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==">
+    <script>
+      // Error handling for missing JavaScript files
+      window.addEventListener('error', function(e) {
+        if (e.message.includes('404') || e.message.includes('Failed to load resource')) {
+          console.error('Resource failed to load:', e.target.src || e.target.href);
+          document.getElementById('root').innerHTML = '<div style="color: red; margin: 20px; font-family: sans-serif;">' +
+            '<h1>Error Loading Resources</h1>' +
+            '<p>Failed to load: ' + (e.target.src || e.target.href) + '</p>' +
+            '<p>Please check that all files are present in the correct location.</p>' +
+            '</div>';
+        }
+      }, true);
+    </script>
   </head>
   <body>
     <div id="root"></div>
@@ -17,9 +30,6 @@
     <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jquery-ui-dist@1.12.1/jquery-ui.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/preloadjs@1.0.1/lib/preloadjs.min.js"></script>
-    
-    <!-- WebGazer eye tracking library -->
-    <script src="./webgazer-2.0.1.js"></script>
     
     <!-- PsychoJS configuration -->
     <script type="text/javascript">
@@ -38,10 +48,41 @@
       };
     </script>
     
-    <!-- experiment -->
-    <script src="./extended_session/extended_session_experiment.js" type="module"></script>
-    <!-- legacy browsers -->
+    <!-- PsychoJS libraries - load before WebGazer -->
     <script src="./lib/psychojs-2021.2.3.iife.js" nomodule></script>
+    
+    <!-- WebGazer eye tracking library -->
+    <script>
+      // Load WebGazer with error handling
+      document.addEventListener('DOMContentLoaded', function() {
+        const script = document.createElement('script');
+        script.src = './webgazer-2.0.1.js';
+        script.onload = function() {
+          console.log('WebGazer loaded successfully from primary file');
+        };
+        script.onerror = function() {
+          console.error('Failed to load WebGazer from webgazer-2.0.1.js. Trying alternate file...');
+          const altScript = document.createElement('script');
+          altScript.src = './webgazer-2.0.1.tp.js';
+          altScript.onload = function() {
+            console.log('WebGazer loaded successfully from alternate file');
+          };
+          altScript.onerror = function() {
+            console.error('Failed to load WebGazer from alternate file. The experiment may not work correctly.');
+            document.getElementById('root').innerHTML += '<div style="color: red; padding: 10px; border: 1px solid red; margin: 10px; font-family: sans-serif;">' +
+              '<h3>WebGazer Failed to Load</h3>' +
+              '<p>The eye tracking library could not be loaded. The experiment will not function correctly.</p>' +
+              '</div>';
+          };
+          document.head.appendChild(altScript);
+        };
+        document.head.appendChild(script);
+      });
+    </script>
+    
+    <!-- experiment -->
+    <script src="./extended_session_experiment.js" type="module"></script>
+    <!-- legacy browsers -->
     <script src="./extended_session/extended_session_experiment-legacy-browsers.js" nomodule></script>
   </body>
 </html>

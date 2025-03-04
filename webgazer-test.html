@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebGazer Test</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            line-height: 1.6;
+        }
+        #status {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            background-color: #f9f9f9;
+        }
+        .success {
+            color: green;
+            font-weight: bold;
+        }
+        .error {
+            color: red;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>WebGazer Test Page</h1>
+    <p>This page tests if WebGazer is properly loaded and initialized.</p>
+    
+    <div id="status">Loading WebGazer...</div>
+    
+    <div id="steps">
+        <h2>Test Steps:</h2>
+        <ol>
+            <li id="step1">Loading WebGazer library ⏳</li>
+            <li id="step2">Initializing WebGazer ⏳</li>
+            <li id="step3">Testing camera access ⏳</li>
+            <li id="step4">Verifying WebGazer components ⏳</li>
+        </ol>
+    </div>
+    
+    <div id="recommendations" style="display: none;">
+        <h2>Recommendations:</h2>
+        <ul id="rec-list"></ul>
+    </div>
+    
+    <script>
+        // Update status function
+        function updateStatus(message, isError = false) {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = message;
+            statusEl.className = isError ? 'error' : 'success';
+            
+            if (isError) {
+                addRecommendation(message);
+            }
+        }
+        
+        // Add recommendation
+        function addRecommendation(issue) {
+            const recList = document.getElementById('rec-list');
+            const recDiv = document.getElementById('recommendations');
+            recDiv.style.display = 'block';
+            
+            let recommendation = '';
+            
+            if (issue.includes('Failed to load')) {
+                recommendation = 'Check that webgazer-2.0.1.js exists in the root directory';
+            } else if (issue.includes('camera')) {
+                recommendation = 'Grant camera permissions or check camera functionality';
+            } else if (issue.includes('WebGazer is not defined')) {
+                recommendation = 'Verify the script loads correctly and isn\'t blocked by browser settings';
+            } else {
+                recommendation = 'Check browser console for detailed error messages';
+            }
+            
+            const recItem = document.createElement('li');
+            recItem.textContent = recommendation;
+            recList.appendChild(recItem);
+        }
+        
+        // Update step status
+        function updateStep(stepNum, status) {
+            const step = document.getElementById('step' + stepNum);
+            if (status === 'success') {
+                step.textContent = step.textContent.replace('⏳', '✅');
+                step.style.color = 'green';
+            } else if (status === 'error') {
+                step.textContent = step.textContent.replace('⏳', '❌');
+                step.style.color = 'red';
+            }
+        }
+        
+        // Begin tests
+        document.addEventListener('DOMContentLoaded', function() {
+            // Step 1: Load WebGazer
+            try {
+                const script = document.createElement('script');
+                script.src = './webgazer-2.0.1.js';
+                script.onload = function() {
+                    updateStep(1, 'success');
+                    updateStatus('WebGazer loaded successfully');
+                    initWebGazer();
+                };
+                script.onerror = function() {
+                    updateStep(1, 'error');
+                    updateStatus('Failed to load WebGazer', true);
+                    
+                    // Try alternate file
+                    const altScript = document.createElement('script');
+                    altScript.src = './webgazer-2.0.1.tp.js';
+                    altScript.onload = function() {
+                        updateStep(1, 'success');
+                        updateStatus('WebGazer loaded from alternate file');
+                        initWebGazer();
+                    };
+                    altScript.onerror = function() {
+                        updateStatus('Failed to load WebGazer from both files', true);
+                    };
+                    document.head.appendChild(altScript);
+                };
+                document.head.appendChild(script);
+            } catch (e) {
+                updateStep(1, 'error');
+                updateStatus('Error loading WebGazer: ' + e.message, true);
+            }
+            
+            // Step 2-4: Initialize WebGazer
+            function initWebGazer() {
+                try {
+                    if (typeof webgazer !== 'undefined') {
+                        updateStep(2, 'success');
+                        
+                        // Step 3: Test camera access
+                        webgazer
+                            .setGazeListener(function(data, timestamp) {
+                                if (data !== null) {
+                                    updateStep(3, 'success');
+                                    
+                                    // Step 4: Verify components
+                                    if (
+                                        document.getElementById('webgazerFaceFeedbackBox') !== null &&
+                                        document.getElementById('webgazerVideoFeed') !== null
+                                    ) {
+                                        updateStep(4, 'success');
+                                        updateStatus('All WebGazer components initialized successfully!');
+                                    } else {
+                                        updateStep(4, 'error');
+                                        updateStatus('WebGazer components not fully initialized', true);
+                                    }
+                                }
+                            })
+                            .begin()
+                            .catch(function(error) {
+                                updateStep(3, 'error');
+                                updateStatus('Camera access error: ' + error.message, true);
+                            });
+                    } else {
+                        updateStep(2, 'error');
+                        updateStatus('WebGazer is not defined after loading', true);
+                    }
+                } catch (e) {
+                    updateStep(2, 'error');
+                    updateStatus('Error initializing WebGazer: ' + e.message, true);
+                }
+            }
+        });
+    </script>
+</body>
+</html> 
