@@ -78,9 +78,206 @@
       addDebugMessage('Page loaded and debug logging initialized');
     </script>
     
+    <!-- JavaScript module detector (load before any other scripts) -->
+    <script>
+      // Helper function to check for ES6 import/export statements in text content
+      window.hasImportExport = function(text) {
+        if (!text || typeof text !== 'string') return false;
+        
+        // Simple regex to detect import/export statements
+        const importRegex = /\b(import|export)\s+(?:[^;'"]+|['"][^'"]+['"])\s+(?:from\s+['"][^'"]+['"]|['"][^'"]+['"])/;
+        return importRegex.test(text);
+      };
+      
+      // Initialize module script tracking
+      window.moduleScripts = [
+        'extended_session_experiment.js',
+        'module-wrapper.js',
+        'extended_session_experiment-module-wrapper.js'
+      ];
+      
+      // Function to detect if a script is a module
+      window.isModuleScript = function(url) {
+        if (!url) return false;
+        return window.moduleScripts.some(module => url.includes(module));
+      };
+      
+      // Setup FetchHook for module detection
+      window.originalFetch = window.fetch;
+      window.fetch = function(url, options) {
+        const promise = window.originalFetch(url, options);
+        
+        // If it's a JavaScript file, check if it's a module
+        if (url && typeof url === 'string' && url.endsWith('.js') && !window.isModuleScript(url)) {
+          promise.then(response => {
+            const clonedResponse = response.clone();
+            clonedResponse.text().then(text => {
+              if (window.hasImportExport(text)) {
+                addDebugMessage(`Detected module from content: ${url}`);
+                window.moduleScripts.push(url);
+              }
+            }).catch(err => {
+              console.warn('Error checking module content:', err);
+            });
+            return response;
+          });
+        }
+        
+        return promise;
+      };
+      
+      addDebugMessage('Module detection system initialized');
+    </script>
+    
     <!-- External libraries - load first to ensure availability -->
     <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jquery-ui-dist@1.12.1/jquery-ui.min.js"></script>
+    
+    <!-- PreloadJS patch - before loading PreloadJS -->
+    <script>
+      // Create a proxy object to intercept CreateJS initialization
+      window.createjsProxyHandler = {
+        LoadQueue: null,
+        appendToHead: null,
+        loadJavascript: null
+      };
+      
+      // Store the original window.createjs
+      window.originalCreateJS = window.createjs;
+      
+      // Prevent createjs from being defined until we can patch it
+      Object.defineProperty(window, 'createjs', {
+        configurable: true,
+        set: function(value) {
+          // Store the real createjs
+          window.originalCreateJS = value;
+          
+          // Instead of setting window.createjs directly, we'll patch it first
+          setTimeout(function() {
+            addDebugMessage('Intercepted CreateJS initialization');
+            patchCreateJS(value);
+          }, 0);
+        },
+        get: function() {
+          return window.originalCreateJS;
+        }
+      });
+      
+      // Function to patch CreateJS when it's loaded
+      function patchCreateJS(createjsObj) {
+        if (!createjsObj) return;
+        
+        addDebugMessage('Patching CreateJS/PreloadJS');
+        
+        // Make sure LoadQueue exists
+        if (createjsObj.LoadQueue) {
+          try {
+            // Store originals for reference
+            window.createjsProxyHandler.LoadQueue = createjsObj.LoadQueue;
+            
+            // Patch the appendToHead method in the LoadQueue's prototype chain
+            const originalAppendToHead = createjsObj.LoadQueue.prototype._loadJavascript;
+            window.createjsProxyHandler.loadJavascript = originalAppendToHead;
+            
+            createjsObj.LoadQueue.prototype._loadJavascript = function(item) {
+              // Check if the item is a module
+              if (item && item.src && window.isModuleScript(item.src)) {
+                addDebugMessage(`CreateJS loading module: ${item.src}`);
+                
+                // Use module-wrapper if it's the main experiment file
+                if (item.src.includes('extended_session_experiment.js')) {
+                  addDebugMessage('Redirecting to module wrapper');
+                  item.src = './extended_session_experiment-module-wrapper.js';
+                }
+                
+                // Create a module script element
+                const script = document.createElement('script');
+                script.type = 'module';
+                script.src = item.src;
+                
+                // Handle load events
+                script.onload = function() {
+                  if (item.completeHandler) {
+                    item.completeHandler();
+                  }
+                };
+                
+                // Handle error events
+                script.onerror = function(event) {
+                  if (item.errorHandler) {
+                    item.errorHandler(event);
+                  }
+                };
+                
+                // Append to the document directly (bypass PreloadJS's appendToHead)
+                document.head.appendChild(script);
+                return true;
+              }
+              
+              // For non-module scripts, use the original method
+              return originalAppendToHead.call(this, item);
+            };
+            
+            // Find the internal appendToHead function in the PreloadJS machinery
+            // This is harder because it's minified, but we can search all properties
+            for (const prop in createjsObj) {
+              if (typeof createjsObj[prop] === 'object' && createjsObj[prop] !== null) {
+                if (typeof createjsObj[prop].appendToHead === 'function') {
+                  addDebugMessage(`Found appendToHead in createjs.${prop}`);
+                  
+                  // Store the original for reference
+                  window.createjsProxyHandler.appendToHead = createjsObj[prop].appendToHead;
+                  
+                  // Replace with our version
+                  createjsObj[prop].appendToHead = function(parent, elem, before) {
+                    // Check if this is a script being appended
+                    if (elem && elem.tagName === 'SCRIPT') {
+                      const src = elem.src || '';
+                      
+                      // If it's a module script that doesn't have type="module"
+                      if (window.isModuleScript(src) && elem.type !== 'module') {
+                        addDebugMessage(`Intercepted script append for module: ${src}`);
+                        
+                        // Create a new script element with type="module"
+                        const moduleScript = document.createElement('script');
+                        moduleScript.type = 'module';
+                        moduleScript.src = elem.src;
+                        moduleScript.async = elem.async;
+                        moduleScript.defer = elem.defer;
+                        
+                        // Copy event handlers
+                        if (elem.onload) moduleScript.onload = elem.onload;
+                        if (elem.onerror) moduleScript.onerror = elem.onerror;
+                        
+                        // Replace the original element with our module script
+                        elem = moduleScript;
+                      }
+                    }
+                    
+                    // Call the original function with our potentially modified element
+                    return window.createjsProxyHandler.appendToHead.call(this, parent, elem, before);
+                  };
+                  
+                  break;
+                }
+              }
+            }
+            
+            // Make sure we're using the patched version
+            window.createjs = createjsObj;
+            addDebugMessage('CreateJS patched successfully');
+          } catch (error) {
+            console.error('Error patching CreateJS:', error);
+            addDebugMessage(`ERROR patching CreateJS: ${error.message}`);
+            
+            // Restore original to prevent completely breaking the library
+            window.createjs = createjsObj;
+          }
+        }
+      }
+    </script>
+    
+    <!-- Now load PreloadJS -->
     <script src="https://cdn.jsdelivr.net/npm/preloadjs@1.0.1/lib/preloadjs.min.js"></script>
     
     <!-- PsychoJS configuration - init early to ensure it's available -->
@@ -206,37 +403,6 @@
     <!-- PsychoJS library -->
     <script src="./lib/psychojs-2021.2.3.js" defer></script>
     
-    <!-- PsychoJS compatibility wrapper -->
-    <script>
-      // Ensure PsychoJS global object is properly initialized
-      window.addEventListener('DOMContentLoaded', function() {
-        // Safety check
-        if (typeof window.psychoJS === 'undefined') {
-          console.error('PsychoJS library failed to initialize');
-          document.getElementById('root').innerHTML = '<div style="color: red; margin: 20px; font-family: sans-serif;">' +
-            '<h1>Error Loading PsychoJS</h1>' +
-            '<p>The experiment library could not be loaded.</p>' +
-            '<p>Please try refreshing the page or check your internet connection.</p>' +
-            '</div>';
-        } else {
-          console.log('PsychoJS library initialized successfully');
-          
-          // Monkey-patch the PsychoJS resource loading to handle ES6 modules
-          if (window.createjs && window.createjs.LoadQueue) {
-            const originalLoadJavascript = window.createjs.LoadQueue.prototype._loadJavascript;
-            window.createjs.LoadQueue.prototype._loadJavascript = function(item) {
-              // Check if this is the main experiment file
-              if (item.src.includes('extended_session_experiment.js')) {
-                console.log('Detected experiment module loading attempt, redirecting to wrapper');
-                item.src = './extended_session_experiment-no-modules.js';
-              }
-              return originalLoadJavascript.call(this, item);
-            };
-          }
-        }
-      });
-    </script>
-    
     <!-- Module wrapper for experiment -->
     <script type="module">
       // Directly import PsychoJS as an ES module
@@ -248,87 +414,38 @@
       // Log success
       addDebugMessage('PsychoJS library imported successfully as ES module');
       
-      // Provide access to util for other scripts
-      window._expUtil = util;
-      window._expVisual = visual;
-      window._expCore = core;
-      window._expData = data;
-      window._expSound = sound;
-    </script>
-    
-    <script type="module" src="./extended_session_experiment-module-wrapper.js"></script>
-    
-    <!-- Fallback for browsers that don't support modules -->
-    <script nomodule>
-      // Create a script element for non-module version
-      document.addEventListener('DOMContentLoaded', function() {
-        console.log('Loading non-module version for browser compatibility');
-        var script = document.createElement('script');
-        script.src = './extended_session_experiment-no-modules.js';
-        script.onerror = function() {
-          document.getElementById('root').innerHTML = '<div style="color: red; margin: 20px; font-family: sans-serif;">' +
-            '<h1>Error Loading Experiment</h1>' +
-            '<p>The experiment script could not be loaded.</p>' +
-            '<p>Please try using a modern browser like Chrome, Firefox, or Edge.</p>' +
-            '</div>';
+      // Try to import the experiment as a module
+      try {
+        // Register the module import handler
+        window.onExperimentModuleLoaded = function(module) {
+          console.log('Experiment module loaded via dynamic import');
         };
-        document.body.appendChild(script);
-      });
+        
+        // Import will be handled by the module wrapper
+        const moduleScript = document.createElement('script');
+        moduleScript.type = 'module';
+        moduleScript.src = './extended_session_experiment-module-wrapper.js';
+        document.head.appendChild(moduleScript);
+      } catch (e) {
+        console.error('Error loading experiment module:', e);
+        addDebugMessage('ERROR: Failed to load experiment module: ' + e.message);
+      }
     </script>
     
-    <!-- Legacy browsers support -->
-    <script nomodule src="./extended_session_experiment-legacy-browsers.js"></script>
-  </head>
-  <body>
+    <!-- Create the experiment root element -->
     <div id="root"></div>
     
-    <!-- Debug and status panels (initially hidden) -->
-    <div id="experiment-status" style="position: fixed; bottom: 10px; left: 10px; background-color: rgba(0,0,0,0.7); color: white; padding: 10px; border-radius: 5px; font-family: monospace; font-size: 12px; z-index: 1000; display: none;">
-      <div>Status: <span id="status-text">Initializing...</span></div>
-      <div>PsychoJS: <span id="psychojs-status">Loading...</span></div>
-      <div>WebGazer: <span id="webgazer-status">Not initialized</span></div>
-      <button onclick="toggleDebugPanel()" style="background: #444; color: white; border: none; padding: 2px 5px; margin-top: 5px; cursor: pointer; font-size: 10px; border-radius: 3px;">Show Debug Log</button>
-    </div>
+    <!-- Debug panel (hidden by default) -->
+    <div id="debug-panel" style="display: none; position: fixed; bottom: 0; left: 0; width: 100%; height: 200px; background: rgba(0,0,0,0.7); color: #0f0; font-family: monospace; padding: 10px; overflow: auto; z-index: 9999;"></div>
     
-    <div id="debug-panel" style="position: fixed; bottom: 70px; left: 10px; background-color: rgba(0,0,0,0.9); color: white; padding: 10px; border-radius: 5px; font-family: monospace; font-size: 10px; max-width: 800px; max-height: 300px; overflow-y: auto; white-space: pre; z-index: 1000; display: none;"></div>
-    
-    <script>
-      // Toggle debug panel visibility
-      function toggleDebugPanel() {
-        const panel = document.getElementById('debug-panel');
-        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-        
-        // Update button text
-        const button = document.querySelector('#experiment-status button');
-        button.textContent = panel.style.display === 'none' ? 'Show Debug Log' : 'Hide Debug Log';
-      }
-      
-      // Show experiment status
-      document.addEventListener('DOMContentLoaded', function() {
-        // Show status panel after a short delay
-        setTimeout(function() {
-          const statusPanel = document.getElementById('experiment-status');
-          if (statusPanel) statusPanel.style.display = 'block';
-          
-          // Update status based on loaded components
-          const psychojsStatus = document.getElementById('psychojs-status');
-          if (psychojsStatus) {
-            psychojsStatus.textContent = window.psychoJS ? 'Loaded' : 'Not loaded';
-            psychojsStatus.style.color = window.psychoJS ? '#4CAF50' : '#F44336';
-          }
-          
-          const webgazerStatus = document.getElementById('webgazer-status');
-          if (webgazerStatus) {
-            webgazerStatus.textContent = window.webgazer ? 'Loaded' : 'Not loaded';
-            webgazerStatus.style.color = window.webgazer ? '#4CAF50' : '#F44336';
-          }
-          
-          const statusText = document.getElementById('status-text');
-          if (statusText) {
-            statusText.textContent = 'Ready';
-          }
-        }, 2000);
-      });
-    </script>
+    <!-- Toggle button for debug panel -->
+    <button id="debug-toggle" style="position: fixed; bottom: 10px; right: 10px; z-index: 10000; padding: 5px; background: #333; color: white; border: none; cursor: pointer; opacity: 0.5;" onclick="
+      const panel = document.getElementById('debug-panel');
+      panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+      this.innerText = panel.style.display === 'none' ? 'Show Debug' : 'Hide Debug';
+    ">Show Debug</button>
+  </head>
+  <body>
+    <!-- The experiment UI will be created dynamically by PsychoJS -->
   </body>
 </html>

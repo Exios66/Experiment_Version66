@@ -38,6 +38,44 @@ const spaPaths = [
     '/results'
 ];
 
+// List of files that should be treated as ES modules
+const moduleFiles = [
+    'extended_session_experiment.js',
+    'module-wrapper.js',
+    'extended_session_experiment-module-wrapper.js'
+];
+
+// Function to check if a file is likely a module (has ES6 imports/exports)
+function checkIfModuleFile(pathname) {
+    // Always treat listed module files as modules
+    if (moduleFiles.some(modFile => pathname.includes(modFile))) {
+        return true;
+    }
+    
+    // For other JS files, check content for import/export statements
+    if (pathname.endsWith('.js') && fs.existsSync(pathname)) {
+        try {
+            const content = fs.readFileSync(pathname, 'utf8');
+            const firstFewLines = content.split('\n').slice(0, 20).join('\n');
+            
+            // Check for import or export statements
+            if (firstFewLines.includes('import ') || 
+                firstFewLines.includes('export ') || 
+                firstFewLines.match(/import\s*{/)) {
+                console.log(`Detected module file: ${pathname}`);
+                // Add to known module files for future requests
+                if (!moduleFiles.some(modFile => pathname.includes(modFile))) {
+                    moduleFiles.push(path.basename(pathname));
+                }
+                return true;
+            }
+        } catch (err) {
+            console.error(`Error checking module file: ${pathname}`, err);
+        }
+    }
+    return false;
+}
+
 // Create server
 const server = http.createServer((req, res) => {
     console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
@@ -72,18 +110,22 @@ const server = http.createServer((req, res) => {
     let contentType = mimeTypes[ext] || 'application/octet-stream';
     
     // Handle JavaScript modules specially
-    if (ext === '.js' && (
-        pathname.includes('module-wrapper') || 
-        req.headers.accept && req.headers.accept.includes('application/javascript')
-    )) {
-        contentType = 'application/javascript';
+    if (ext === '.js') {
+        // Check if this is a module file
+        const isModule = checkIfModuleFile(pathname) ||
+                        pathname.includes('module-wrapper') || 
+                        (req.headers.accept && req.headers.accept.includes('application/javascript'));
         
-        // Add special header for modules if needed
-        if (pathname.includes('module-wrapper')) {
-            // Important: Set CORS headers for module scripts
+        if (isModule) {
+            contentType = 'application/javascript';
+            
+            // Add special header for modules
             res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
             res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
         }
+        
+        // Log the file type detection
+        console.log(`Serving JS file: ${pathname} as ${isModule ? 'module' : 'regular script'}`);
     }
     
     // Special case for the webgazer library and its source map

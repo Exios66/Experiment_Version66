@@ -13,6 +13,11 @@ window.loadExperimentModule = function() {
   console.log('Loading experiment as ES6 module...');
   window.experimentLoadAttempts++;
   
+  // Add message to debug log if available
+  if (typeof addDebugMessage === 'function') {
+    addDebugMessage(`Attempt ${window.experimentLoadAttempts} to load experiment module`);
+  }
+  
   // Import the module dynamically
   import('./extended_session_experiment.js')
     .then(module => {
@@ -22,6 +27,11 @@ window.loadExperimentModule = function() {
       // Store a reference to the module
       window.experimentModule = module;
       
+      // Add message to debug log if available
+      if (typeof addDebugMessage === 'function') {
+        addDebugMessage('Experiment module loaded successfully');
+      }
+      
       // Notify any listeners that might be waiting for the module
       if (typeof window.onExperimentModuleLoaded === 'function') {
         window.onExperimentModuleLoaded(module);
@@ -30,9 +40,19 @@ window.loadExperimentModule = function() {
       // Dispatch a custom event
       const event = new CustomEvent('experimentModuleLoaded', { detail: module });
       window.dispatchEvent(event);
+      
+      // Register this file as a module for PreloadJS detection
+      if (window.moduleScripts && !window.moduleScripts.includes('extended_session_experiment.js')) {
+        window.moduleScripts.push('extended_session_experiment.js');
+      }
     })
     .catch(error => {
       console.error('Failed to load experiment module:', error);
+      
+      // Add message to debug log if available
+      if (typeof addDebugMessage === 'function') {
+        addDebugMessage(`ERROR: Failed to load experiment module: ${error.message}`);
+      }
       
       if (window.experimentLoadAttempts < window.maxLoadAttempts) {
         // Try again with a delay
@@ -55,6 +75,11 @@ function loadNonModuleVersion() {
   script.onload = function() {
     console.log('Non-module version loaded successfully');
     
+    // Add message to debug log if available
+    if (typeof addDebugMessage === 'function') {
+      addDebugMessage('Loaded non-module version of experiment');
+    }
+    
     // Notify the page that the experiment is ready
     window.experimentModuleLoaded = true;
     
@@ -65,6 +90,11 @@ function loadNonModuleVersion() {
   
   script.onerror = function(e) {
     console.error('Failed to load non-module version:', e);
+    
+    // Add message to debug log if available
+    if (typeof addDebugMessage === 'function') {
+      addDebugMessage(`ERROR: Failed to load non-module fallback: ${e ? e.message || 'Unknown error' : 'Unknown error'}`);
+    }
     
     // Final fallback: Show error message
     const rootElement = document.getElementById('root');
@@ -89,13 +119,72 @@ function loadNonModuleVersion() {
   document.head.appendChild(script);
 }
 
+// Helper function to detect if we're in a context where createjs is available
+function patchCreateJS() {
+  if (window.createjs && window.createjs.LoadQueue) {
+    console.log('Patching CreateJS from module wrapper');
+    
+    // Patch LoadQueue to handle modules
+    if (!window.createJSPatched) {
+      const originalLoadJavascript = window.createjs.LoadQueue.prototype._loadJavascript;
+      
+      window.createjs.LoadQueue.prototype._loadJavascript = function(item) {
+        console.log(`CreateJS loading script: ${item.src}`);
+        
+        // Check if this is a module script
+        if (item.src.includes('extended_session_experiment.js')) {
+          console.log('CreateJS detected module file, redirecting to wrapper');
+          
+          // Redirect to this wrapper instead
+          item.src = './extended_session_experiment-module-wrapper.js';
+          
+          // Handle the item directly
+          const tag = document.createElement('script');
+          tag.type = 'module';
+          tag.src = item.src;
+          
+          tag.onload = function() {
+            console.log('Module wrapper loaded via CreateJS');
+            if (item.completeHandler) {
+              item.completeHandler();
+            }
+          };
+          
+          tag.onerror = function(event) {
+            console.error('Module wrapper failed to load via CreateJS');
+            if (item.errorHandler) {
+              item.errorHandler(event);
+            }
+          };
+          
+          document.body.appendChild(tag);
+          return true;
+        }
+        
+        return originalLoadJavascript.call(this, item);
+      };
+      
+      window.createJSPatched = true;
+    }
+  }
+}
+
+// Try to patch CreateJS if available
+patchCreateJS();
+
 // Set up a timeout to ensure we don't hang
 setTimeout(function() {
   if (!window.experimentModuleLoaded) {
     console.warn('Experiment module not loaded after timeout, trying fallback...');
+    if (typeof addDebugMessage === 'function') {
+      addDebugMessage('WARNING: Module load timeout, trying fallback');
+    }
     loadNonModuleVersion();
   }
 }, 5000);
+
+// Try to patch CreateJS again after a delay (in case it loads after this script)
+setTimeout(patchCreateJS, 1000);
 
 // Load the module when this script executes
 window.loadExperimentModule(); 

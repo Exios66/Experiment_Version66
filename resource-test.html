@@ -6,268 +6,316 @@
     <title>Resource Loading Test</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
             line-height: 1.6;
             color: #333;
-        }
-        .container {
             max-width: 800px;
             margin: 0 auto;
+            padding: 20px;
         }
         h1 {
-            color: #2c3e50;
-        }
-        .test-group {
-            border: 1px solid #ddd;
-            padding: 15px;
+            border-bottom: 2px solid #f0f0f0;
+            padding-bottom: 10px;
             margin-bottom: 20px;
-            border-radius: 5px;
         }
-        .test-item {
-            margin-bottom: 10px;
-            padding: 10px;
+        .test-section {
+            margin-bottom: 30px;
+            padding: 15px;
+            border: 1px solid #e0e0e0;
+            border-radius: 5px;
             background-color: #f9f9f9;
         }
-        .success {
-            color: green;
+        .test-title {
             font-weight: bold;
+            margin-bottom: 10px;
         }
-        .fail {
-            color: red;
-            font-weight: bold;
+        .test-result {
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 10px;
+            min-height: 30px;
+        }
+        .success {
+            background-color: #dff0d8;
+            color: #3c763d;
+            border: 1px solid #d6e9c6;
+        }
+        .failure {
+            background-color: #f2dede;
+            color: #a94442;
+            border: 1px solid #ebccd1;
         }
         .pending {
-            color: orange;
-            font-weight: bold;
+            background-color: #fcf8e3;
+            color: #8a6d3b;
+            border: 1px solid #faebcc;
         }
-        #log {
+        .warning {
+            background-color: #fcf8e3;
+            color: #8a6d3b;
+            border: 1px solid #faebcc;
+        }
+        button {
+            padding: 8px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        pre {
+            background-color: #f5f5f5;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 14px;
+        }
+        #logs {
+            font-family: monospace;
             height: 200px;
             overflow-y: auto;
-            border: 1px solid #ccc;
+            background-color: #2d2d2d;
+            color: #f0f0f0;
             padding: 10px;
-            background-color: #f5f5f5;
-            font-family: monospace;
+            border-radius: 4px;
             margin-top: 20px;
+        }
+        .log-item {
+            margin-bottom: 4px;
+        }
+        .log-error {
+            color: #ff6b6b;
+        }
+        .log-success {
+            color: #69db7c;
+        }
+        .log-info {
+            color: #74c0fc;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Resource Loading Test</h1>
-        <p>This page tests whether all required resources for the experiment load correctly.</p>
-        
-        <div class="test-group">
-            <h2>External Libraries</h2>
-            <div id="jquery-test" class="test-item">jQuery: <span class="pending">Checking...</span></div>
-            <div id="jqueryui-test" class="test-item">jQuery UI: <span class="pending">Checking...</span></div>
-            <div id="preloadjs-test" class="test-item">PreloadJS: <span class="pending">Checking...</span></div>
-        </div>
-        
-        <div class="test-group">
-            <h2>PsychoJS</h2>
-            <div id="psychojs-test" class="test-item">PsychoJS Library: <span class="pending">Checking...</span></div>
-            <div id="psychojs-core-test" class="test-item">PsychoJS Core: <span class="pending">Checking...</span></div>
-            <div id="psychojs-visual-test" class="test-item">PsychoJS Visual: <span class="pending">Checking...</span></div>
-        </div>
-        
-        <div class="test-group">
-            <h2>WebGazer</h2>
-            <div id="webgazer-test" class="test-item">WebGazer Library: <span class="pending">Checking...</span></div>
-            <div id="webgazer-methods-test" class="test-item">WebGazer Methods: <span class="pending">Checking...</span></div>
-        </div>
-        
-        <div class="test-group">
-            <h2>ES Modules Support</h2>
-            <div id="es-modules-test" class="test-item">ES Modules: <span class="pending">Checking...</span></div>
-        </div>
-        
-        <button id="run-tests">Run Tests Again</button>
-        
-        <div id="log"></div>
+    <h1>Resource Loading Test</h1>
+    <p>This page tests various resource loading scenarios for the experiment.</p>
+    
+    <div class="test-section">
+        <div class="test-title">1. Load JavaScript with ES6 imports via PreloadJS</div>
+        <button onclick="testCreateJSModuleLoading()">Run Test</button>
+        <div id="createjs-test-result" class="test-result pending">Click "Run Test" to start</div>
     </div>
     
-    <!-- External libraries -->
-    <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/jquery-ui-dist@1.12.1/jquery-ui.min.js"></script>
+    <div class="test-section">
+        <div class="test-title">2. Load JavaScript with ES6 imports directly</div>
+        <button onclick="testDirectModuleLoading()">Run Test</button>
+        <div id="direct-test-result" class="test-result pending">Click "Run Test" to start</div>
+    </div>
+    
+    <div class="test-section">
+        <div class="test-title">3. Test Module Wrapper</div>
+        <button onclick="testModuleWrapper()">Run Test</button>
+        <div id="wrapper-test-result" class="test-result pending">Click "Run Test" to start</div>
+    </div>
+    
+    <div class="test-section">
+        <div class="test-title">4. Test MIME Type Detection</div>
+        <button onclick="testMimeTypeDetection()">Run Test</button>
+        <div id="mime-test-result" class="test-result pending">Click "Run Test" to start</div>
+    </div>
+    
+    <h2>Test Logs</h2>
+    <div id="logs"></div>
+    
+    <!-- Load CreateJS LoadQueue -->
     <script src="https://cdn.jsdelivr.net/npm/preloadjs@1.0.1/lib/preloadjs.min.js"></script>
     
-    <!-- PsychoJS configuration -->
-    <script type="text/javascript">
-        window.psychoJS = {
-            debug: true,
-            collectIP: false,
-            hosts: {
-                local: '',
-                pavlovia: 'https://pavlovia.org'
-            },
-            log: function() {
-                if (window.psychoJS.debug) {
-                    console.log.apply(console, arguments);
-                }
-            },
-        };
-    </script>
-    
-    <!-- Testing script -->
     <script>
-        function logMessage(message) {
-            const logElement = document.getElementById('log');
-            const timestamp = new Date().toLocaleTimeString();
-            logElement.innerHTML += `[${timestamp}] ${message}<br>`;
-            logElement.scrollTop = logElement.scrollHeight;
+        // Logging function
+        function log(message, type = 'info') {
+            const logEl = document.getElementById('logs');
+            const logItem = document.createElement('div');
+            logItem.className = `log-item log-${type}`;
+            logItem.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logEl.appendChild(logItem);
+            logEl.scrollTop = logEl.scrollHeight;
+            console.log(`[${type}] ${message}`);
         }
         
-        function updateTestResult(id, success, message) {
-            const element = document.getElementById(id).querySelector('span');
-            element.className = success ? 'success' : 'fail';
-            element.textContent = message || (success ? 'Success' : 'Failed');
-            logMessage(`${id}: ${message || (success ? 'Success' : 'Failed')}`);
+        // Update test result
+        function updateTestResult(id, status, message) {
+            const resultEl = document.getElementById(id);
+            resultEl.className = `test-result ${status}`;
+            resultEl.innerHTML = message;
         }
         
-        function runTests() {
-            // Reset results
-            document.querySelectorAll('.test-item span').forEach(el => {
-                el.className = 'pending';
-                el.textContent = 'Checking...';
-            });
+        // Test CreateJS module loading
+        function testCreateJSModuleLoading() {
+            updateTestResult('createjs-test-result', 'pending', 'Testing...');
+            log('Starting CreateJS module loading test', 'info');
             
-            // Clear log
-            document.getElementById('log').innerHTML = '';
-            logMessage('Starting tests...');
-            
-            // Test jQuery
-            setTimeout(() => {
-                try {
-                    if (typeof jQuery !== 'undefined') {
-                        updateTestResult('jquery-test', true, `Success (v${jQuery.fn.jquery})`);
-                    } else {
-                        updateTestResult('jquery-test', false);
-                    }
-                } catch (e) {
-                    updateTestResult('jquery-test', false, `Error: ${e.message}`);
-                }
-            }, 100);
-            
-            // Test jQuery UI
-            setTimeout(() => {
-                try {
-                    if (typeof jQuery !== 'undefined' && typeof jQuery.ui !== 'undefined') {
-                        updateTestResult('jqueryui-test', true, `Success (v${jQuery.ui.version})`);
-                    } else {
-                        updateTestResult('jqueryui-test', false);
-                    }
-                } catch (e) {
-                    updateTestResult('jqueryui-test', false, `Error: ${e.message}`);
-                }
-            }, 200);
-            
-            // Test PreloadJS
-            setTimeout(() => {
-                try {
-                    if (typeof createjs !== 'undefined' && typeof createjs.LoadQueue !== 'undefined') {
-                        updateTestResult('preloadjs-test', true);
-                    } else {
-                        updateTestResult('preloadjs-test', false);
-                    }
-                } catch (e) {
-                    updateTestResult('preloadjs-test', false, `Error: ${e.message}`);
-                }
-            }, 300);
-            
-            // Load PsychoJS
-            const psychojsScript = document.createElement('script');
-            psychojsScript.src = './lib/psychojs-2021.2.3.js';
-            psychojsScript.onload = function() {
-                updateTestResult('psychojs-test', true);
+            try {
+                // Initialize CreateJS LoadQueue
+                const queue = new createjs.LoadQueue(true);
                 
-                // Test PsychoJS Core
-                try {
-                    if (typeof psychoJS !== 'undefined') {
-                        updateTestResult('psychojs-core-test', true);
-                    } else {
-                        updateTestResult('psychojs-core-test', false);
-                    }
-                } catch (e) {
-                    updateTestResult('psychojs-core-test', false, `Error: ${e.message}`);
-                }
+                // Track module loading success
+                let moduleLoaded = false;
                 
-                // Test PsychoJS Visual
-                try {
-                    // This will test via dynamic import
-                    import('./lib/psychojs-2021.2.3.js')
-                        .then(module => {
-                            if (module && module.visual) {
-                                updateTestResult('psychojs-visual-test', true);
-                                updateTestResult('es-modules-test', true);
-                            } else {
-                                updateTestResult('psychojs-visual-test', false, 'Module loaded but visual not found');
-                            }
-                        })
-                        .catch(err => {
-                            updateTestResult('psychojs-visual-test', false, `Import error: ${err.message}`);
-                            updateTestResult('es-modules-test', false, `Failed: ${err.message}`);
-                        });
-                } catch (e) {
-                    updateTestResult('psychojs-visual-test', false, `Error: ${e.message}`);
-                }
-            };
-            psychojsScript.onerror = function() {
-                updateTestResult('psychojs-test', false);
-                updateTestResult('psychojs-core-test', false, 'PsychoJS not loaded');
-                updateTestResult('psychojs-visual-test', false, 'PsychoJS not loaded');
-            };
-            document.head.appendChild(psychojsScript);
-            
-            // Load WebGazer
-            const webgazerScript = document.createElement('script');
-            webgazerScript.src = './webgazer-2.0.1.js';
-            webgazerScript.onload = function() {
-                updateTestResult('webgazer-test', true);
+                // Set up event handlers
+                queue.addEventListener('complete', handleComplete);
+                queue.addEventListener('error', handleError);
+                queue.addEventListener('fileload', handleFileLoad);
                 
-                // Test WebGazer methods
-                try {
-                    if (typeof webgazer !== 'undefined' && typeof webgazer.setGazeListener === 'function') {
-                        updateTestResult('webgazer-methods-test', true);
-                    } else {
-                        updateTestResult('webgazer-methods-test', false, 'WebGazer loaded but methods missing');
-                    }
-                } catch (e) {
-                    updateTestResult('webgazer-methods-test', false, `Error: ${e.message}`);
-                }
-            };
-            webgazerScript.onerror = function() {
-                // Try alternative WebGazer file
-                const altWebgazerScript = document.createElement('script');
-                altWebgazerScript.src = './webgazer-2.0.1.tp.js';
-                altWebgazerScript.onload = function() {
-                    updateTestResult('webgazer-test', true, 'Success (alternate file)');
+                // Add a listener for our custom event
+                window.addEventListener('experimentModuleLoaded', function(e) {
+                    log('experimentModuleLoaded event fired', 'success');
+                    moduleLoaded = true;
+                }, { once: true });
+                
+                // Load the module
+                queue.loadFile({id: "experiment", src: "./extended_session_experiment.js"});
+                
+                function handleComplete() {
+                    log('CreateJS loading complete', 'info');
                     
-                    // Test WebGazer methods
-                    try {
-                        if (typeof webgazer !== 'undefined' && typeof webgazer.setGazeListener === 'function') {
-                            updateTestResult('webgazer-methods-test', true);
+                    // Give a little time for the module loaded event to fire
+                    setTimeout(function() {
+                        if (moduleLoaded) {
+                            updateTestResult('createjs-test-result', 'success', 
+                                'Success! CreateJS properly loaded the module script.');
                         } else {
-                            updateTestResult('webgazer-methods-test', false, 'WebGazer loaded but methods missing');
+                            updateTestResult('createjs-test-result', 'warning', 
+                                'Loading completed, but module events were not detected. Check if it loaded as a regular script.');
                         }
-                    } catch (e) {
-                        updateTestResult('webgazer-methods-test', false, `Error: ${e.message}`);
-                    }
-                };
-                altWebgazerScript.onerror = function() {
-                    updateTestResult('webgazer-test', false, 'Failed to load from both sources');
-                    updateTestResult('webgazer-methods-test', false, 'WebGazer not loaded');
-                };
-                document.head.appendChild(altWebgazerScript);
-            };
-            document.head.appendChild(webgazerScript);
+                    }, 1000);
+                }
+                
+                function handleError(event) {
+                    log(`Error loading file: ${event.data ? event.data.id : 'unknown'}`, 'error');
+                    updateTestResult('createjs-test-result', 'failure', 
+                        `Failed to load the file: ${event.data ? event.data.id : 'unknown'}`);
+                }
+                
+                function handleFileLoad(event) {
+                    log(`File loaded: ${event.item.id}`, 'success');
+                }
+            } catch (error) {
+                log(`Error in test: ${error.message}`, 'error');
+                updateTestResult('createjs-test-result', 'failure', 
+                    `Test error: ${error.message}`);
+            }
         }
         
-        // Run tests when page loads
-        document.addEventListener('DOMContentLoaded', runTests);
+        // Test direct module loading
+        function testDirectModuleLoading() {
+            updateTestResult('direct-test-result', 'pending', 'Testing...');
+            log('Starting direct module loading test', 'info');
+            
+            try {
+                const script = document.createElement('script');
+                script.type = 'module';
+                script.src = './extended_session_experiment.js';
+                
+                script.onload = function() {
+                    log('Module script loaded directly', 'success');
+                    updateTestResult('direct-test-result', 'success', 
+                        'Success! Direct module script loading works.');
+                };
+                
+                script.onerror = function(error) {
+                    log(`Error loading module script: ${error}`, 'error');
+                    updateTestResult('direct-test-result', 'failure', 
+                        'Failed to load module script directly.');
+                };
+                
+                document.body.appendChild(script);
+            } catch (error) {
+                log(`Error in test: ${error.message}`, 'error');
+                updateTestResult('direct-test-result', 'failure', 
+                    `Test error: ${error.message}`);
+            }
+        }
         
-        // Run tests again when button is clicked
-        document.getElementById('run-tests').addEventListener('click', runTests);
+        // Test module wrapper
+        function testModuleWrapper() {
+            updateTestResult('wrapper-test-result', 'pending', 'Testing...');
+            log('Starting module wrapper test', 'info');
+            
+            try {
+                // Set up event listeners
+                window.addEventListener('experimentModuleLoaded', function(e) {
+                    log('Module wrapper loaded experiment successfully', 'success');
+                    updateTestResult('wrapper-test-result', 'success', 
+                        'Success! Module wrapper loaded the experiment module.');
+                }, { once: true });
+                
+                window.addEventListener('experimentNonModuleLoaded', function(e) {
+                    log('Module wrapper fell back to non-module version', 'warning');
+                    updateTestResult('wrapper-test-result', 'warning', 
+                        'Module wrapper fell back to non-module version. This may be expected if the module version failed.');
+                }, { once: true });
+                
+                // Load the wrapper
+                const script = document.createElement('script');
+                script.type = 'module';
+                script.src = './extended_session_experiment-module-wrapper.js';
+                
+                script.onerror = function(error) {
+                    log(`Error loading module wrapper: ${error}`, 'error');
+                    updateTestResult('wrapper-test-result', 'failure', 
+                        'Failed to load module wrapper.');
+                };
+                
+                // Set a timeout to detect if nothing happens
+                setTimeout(function() {
+                    if (document.getElementById('wrapper-test-result').classList.contains('pending')) {
+                        updateTestResult('wrapper-test-result', 'failure', 
+                            'Module wrapper test timed out. No events were fired.');
+                    }
+                }, 6000);
+                
+                document.body.appendChild(script);
+            } catch (error) {
+                log(`Error in test: ${error.message}`, 'error');
+                updateTestResult('wrapper-test-result', 'failure', 
+                    `Test error: ${error.message}`);
+            }
+        }
+        
+        // Test MIME type detection
+        function testMimeTypeDetection() {
+            updateTestResult('mime-test-result', 'pending', 'Testing...');
+            log('Starting MIME type detection test', 'info');
+            
+            fetch('./extended_session_experiment.js', { method: 'HEAD' })
+                .then(response => {
+                    const contentType = response.headers.get('content-type');
+                    log(`Content-Type for module file: ${contentType}`, 'info');
+                    
+                    if (contentType && contentType.includes('application/javascript')) {
+                        updateTestResult('mime-test-result', 'success', 
+                            `Success! Server is serving module scripts with correct MIME type: ${contentType}`);
+                    } else if (contentType && contentType.includes('javascript')) {
+                        updateTestResult('mime-test-result', 'warning', 
+                            `Server is serving module scripts with generic JavaScript MIME type: ${contentType}. This may work but is not ideal.`);
+                    } else {
+                        updateTestResult('mime-test-result', 'failure', 
+                            `Server is serving module scripts with incorrect MIME type: ${contentType}`);
+                    }
+                })
+                .catch(error => {
+                    log(`Error in MIME type test: ${error.message}`, 'error');
+                    updateTestResult('mime-test-result', 'failure', 
+                        `Test error: ${error.message}`);
+                });
+        }
+        
+        // Log page load
+        window.addEventListener('DOMContentLoaded', function() {
+            log('Resource test page loaded', 'info');
+        });
     </script>
 </body>
 </html> 
