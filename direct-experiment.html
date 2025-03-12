@@ -320,12 +320,41 @@
           log('WebGazer initialized and running');
           
           // Set up video container
-          const videoElement = document.getElementById('webgazerVideoFeed');
+          let videoElement = document.getElementById('webgazerVideoFeed');
+          
+          // If video element doesn't exist, create it manually
+          if (!videoElement) {
+            log('Creating video element manually');
+            videoElement = document.createElement('video');
+            videoElement.id = 'webgazerVideoFeed';
+            videoElement.autoplay = true;
+            videoElement.style.display = 'block';
+            
+            // Try to get video stream manually
+            try {
+              const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { 
+                  width: { ideal: 1280 },
+                  height: { ideal: 720 },
+                  facingMode: "user"
+                } 
+              });
+              videoElement.srcObject = stream;
+            } catch (e) {
+              log('ERROR accessing camera: ' + e.message);
+            }
+          }
+          
           if (videoElement) {
             const webcamContainer = document.getElementById('webcam-container');
-            webcamContainer.appendChild(videoElement);
-            videoElement.style.width = '100%';
-            videoElement.style.height = '100%';
+            if (webcamContainer.contains(videoElement)) {
+              log('Video element already in container');
+            } else {
+              webcamContainer.appendChild(videoElement);
+              videoElement.style.width = '100%';
+              videoElement.style.height = '100%';
+              log('Video element added to container');
+            }
           } else {
             log('WARNING: Video feed element not found');
           }
