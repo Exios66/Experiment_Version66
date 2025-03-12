@@ -2,6 +2,17 @@
  * Demo_Eye_Tracking2 Test *
  ***************************/
 
+// Add module declaration to ensure proper loading
+/**
+ * @fileoverview Extended session eye tracking experiment
+ * @module extended_session_experiment
+ * 
+ * MAJOR BUG FIXES:
+ * 1. Added ensureComponentClock helper to prevent "Cannot read properties of undefined (reading 'reset')" errors
+ * 2. Applied this fix to calibrationClick, inst1_resp, and tracking_resp components
+ * 3. Added module documentation at the top of the file to ensure proper loading
+ */
+
 import { core, data, sound, util, visual } from './lib/psychojs-2021.2.3.js';
 const { PsychoJS } = core;
 const { TrialHandler } = data;
@@ -9,6 +20,34 @@ const { Scheduler } = util;
 //some handy aliases as in the psychopy scripts;
 const { abs, sin, cos, PI: pi, sqrt } = Math;
 const { round } = util;
+
+/**
+ * Ensure a component has a properly initialized clock.
+ * This fixes issues with components trying to use .clock when it's undefined.
+ * @param {Object} component - The psychoJS component to check
+ * @param {string} name - Name of the component for logging
+ * @returns {Object} - The component with an initialized clock
+ */
+function ensureComponentClock(component, name) {
+  if (!component) {
+    console.warn(`Component ${name} is undefined`);
+    return component;
+  }
+  
+  // Check if clock exists
+  if (!component.clock) {
+    // Try to use mouseClock if it exists (for Mouse components)
+    if (component.mouseClock) {
+      console.log(`Using ${name}.mouseClock as clock`);
+      component.clock = component.mouseClock;
+    } else {
+      console.log(`Initializing ${name}.clock`);
+      component.clock = new util.Clock();
+    }
+  }
+  
+  return component;
+}
 
 // Add after the imports but before the experiment info:
 
@@ -577,8 +616,12 @@ async function experimentInit() {
   
   calibrationClick = new core.Mouse({
     win: psychoJS.window,
+    name: 'calibrationClick',
+    autoLog: false
   });
+  // Initialize as both mouseClock (original) and clock (what's used later)
   calibrationClick.mouseClock = new util.Clock();
+  calibrationClick.clock = calibrationClick.mouseClock; // Ensure clock is also available
   // Initialize components for Routine "trackingTrial"
   trackingTrialClock = new util.Clock();
   tracking_square = createVisualComponent(visual.Rect, {
@@ -1000,7 +1043,9 @@ function inst1RoutineEachFrame() {
       inst1_resp.frameNStart = frameN;  // exact frame index
       
       // keyboard checking is just starting
-      psychoJS.window.callOnFlip(function() { inst1_resp.clock.reset(); });  // t=0 on next screen flip
+      psychoJS.window.callOnFlip(function() { 
+        ensureComponentClock(inst1_resp, 'inst1_resp').clock.reset();
+      });  // t=0 on next screen flip
       psychoJS.window.callOnFlip(function() { inst1_resp.start(); }); // start on screen flip
       psychoJS.window.callOnFlip(function() { inst1_resp.clearEvents(); });
     }
@@ -1295,6 +1340,16 @@ function calibrationRoutineBegin(snapshot) {
     calibration_square.setPos([calibration_x, calibration_y]);
     // setup some python lists for storing info about the calibrationClick
     calibrationClick.clicked_name = [];
+    // Ensure the clock property is initialized - try mouseClock first
+    if (!calibrationClick.clock) {
+      if (calibrationClick.mouseClock) {
+        console.log("Using calibrationClick.mouseClock as clock");
+        calibrationClick.clock = calibrationClick.mouseClock;
+      } else {
+        console.log("Initializing calibrationClick.clock");
+        calibrationClick.clock = new util.Clock();
+      }
+    }
     gotValidClick = false; // until a click is received
     // keep track of which components have finished
     calibrationComponents = [];
@@ -1428,7 +1483,9 @@ function calibrationRoutineEachFrame() {
       calibrationClick.frameNStart = frameN;  // exact frame index
       
       // keyboard checking is just starting
-      psychoJS.window.callOnFlip(function() { calibrationClick.clock.reset(); });  // t=0 on next screen flip
+      psychoJS.window.callOnFlip(function() { 
+        ensureComponentClock(calibrationClick, 'calibrationClick').clock.reset();
+      });  // t=0 on next screen flip
       psychoJS.window.callOnFlip(function() { calibrationClick.start(); }); // start on screen flip
       psychoJS.window.callOnFlip(function() { calibrationClick.clearEvents(); });
     }
@@ -1725,7 +1782,9 @@ function trackingTrialRoutineEachFrame() {
       tracking_resp.frameNStart = frameN;  // exact frame index
       
       // keyboard checking is just starting
-      psychoJS.window.callOnFlip(function() { tracking_resp.clock.reset(); });  // t=0 on next screen flip
+      psychoJS.window.callOnFlip(function() { 
+        ensureComponentClock(tracking_resp, 'tracking_resp').clock.reset();
+      });  // t=0 on next screen flip
       psychoJS.window.callOnFlip(function() { tracking_resp.start(); }); // start on screen flip
       psychoJS.window.callOnFlip(function() { tracking_resp.clearEvents(); });
     }
@@ -1943,17 +2002,20 @@ function startGazeLogging() {
       window.gazeDebugWindow.close();
     }
     
-
-    // Open new debug window
-    window.gazeDebugWindow = window.open('', 'WebGazer Debug', windowFeatures);
+    // Open new debug window - using a unique name based on timestamp to ensure it's always a new window
+    const uniqueWindowName = 'WebGazer_Debug_' + Date.now();
+    window.gazeDebugWindow = window.open('', uniqueWindowName, windowFeatures);
     
     if (window.gazeDebugWindow) {
+      // Make the window flash to get user's attention
+      window.gazeDebugWindow.focus();
+      
       // Initialize the debug window with HTML structure
       window.gazeDebugWindow.document.write(`
         <!DOCTYPE html>
         <html>
         <head>
-          <title>WebGazer Gaze Data Visualization</title>
+          <title>👁️ GAZE TRACKING COORDINATES 👁️</title>
           <style>
             body { 
               font-family: Arial, sans-serif; 
@@ -2072,173 +2134,174 @@ function startGazeLogging() {
           </style>
         </head>
         <body>
-          <h2>WebGazer Gaze Data Visualization</h2>
-          
-          <div class="section">
-            <h3>Configuration</h3>
-            <div id="config">
-              Screen Resolution: <span id="screenResolution">${window.screenWidth || window.screen.width}x${window.screenHeight || window.screen.height}</span><br>
-              Webcam: <span id="webcamInfo">${expInfo.webcam || 'Default'}</span><br>
-              Calibration Status: <span id="calibrationStatus">In Progress</span>
+          <h2>👁️ REAL-TIME GAZE TRACKING COORDINATES 👁️</h2>
+          <div id="stats">
+            <div class="section">
+              <h3>Configuration</h3>
+              <div id="config">
+                Screen Resolution: <span id="screenResolution">${window.screenWidth || window.screen.width}x${window.screenHeight || window.screen.height}</span><br>
+                Webcam: <span id="webcamInfo">${expInfo.webcam || 'Default'}</span><br>
+                Calibration Status: <span id="calibrationStatus">In Progress</span>
+              </div>
             </div>
-          </div>
-          
-          <div class="section">
-            <h3>Statistics</h3>
-            <div id="stats">
-              Total points: <span id="pointCount">0</span><br>
-              Last coordinates: <span id="lastCoords">None</span><br>
-              Points per second: <span id="pointsPerSecond">0</span><br>
-              Mapping quality: <span id="mappingQuality">Unknown</span>
-            </div>
-          </div>
-          
-          <div class="section">
-            <h3>Real-time Gaze Visualization</h3>
-            <div id="visualization">
-              <!-- Grid lines will be added by JavaScript -->
-            </div>
-          </div>
-          
-          <div class="section">
-            <h3>Gaze Heatmap</h3>
-            <div id="heatmap"></div>
-          </div>
-          
-          <div id="controls">
-            <button id="exportBtn">Export Data (CSV)</button>
-            <button id="clearBtn">Clear Visualizations</button>
-            <button id="toggleHeatmapBtn">Toggle Heatmap</button>
-            <button id="toggleGridBtn">Toggle Grid</button>
-          </div>
-          
-          <div class="section">
-            <h3>Recent Data Points</h3>
-            <div id="log"></div>
-          </div>
-          
-          <script>
-            // Variables for tracking
-            let startTime = Date.now();
-            let pointsCollected = 0;
-            let showHeatmap = true;
-            let showGrid = true;
             
-            // Create grid lines for visualization
-            function createGrid() {
-              const vizElem = document.getElementById('visualization');
-              if (!vizElem) return;
+            <div class="section">
+              <h3>Statistics</h3>
+              <div id="stats">
+                Total points: <span id="pointCount">0</span><br>
+                Last coordinates: <span id="lastCoords">None</span><br>
+                Points per second: <span id="pointsPerSecond">0</span><br>
+                Mapping quality: <span id="mappingQuality">Unknown</span>
+              </div>
+            </div>
+            
+            <div class="section">
+              <h3>Real-time Gaze Visualization</h3>
+              <div id="visualization">
+                <!-- Grid lines will be added by JavaScript -->
+              </div>
+            </div>
+            
+            <div class="section">
+              <h3>Gaze Heatmap</h3>
+              <div id="heatmap"></div>
+            </div>
+            
+            <div id="controls">
+              <button id="exportBtn">Export Data (CSV)</button>
+              <button id="clearBtn">Clear Visualizations</button>
+              <button id="toggleHeatmapBtn">Toggle Heatmap</button>
+              <button id="toggleGridBtn">Toggle Grid</button>
+            </div>
+            
+            <div class="section">
+              <h3>Recent Data Points</h3>
+              <div id="log"></div>
+            </div>
+            
+            <script>
+              // Variables for tracking
+              let startTime = Date.now();
+              let pointsCollected = 0;
+              let showHeatmap = true;
+              let showGrid = true;
               
-              // Clear existing grid
-              const existingGridLines = vizElem.querySelectorAll('.grid-line, .coordinate-label');
-              existingGridLines.forEach(line => line.remove());
-              
-              if (!showGrid) return;
-              
-              const width = vizElem.offsetWidth;
-              const height = vizElem.offsetHeight;
-              
-              // Create horizontal grid lines (5 lines)
-              for (let i = 0; i <= 4; i++) {
-                const y = (i / 4) * height;
-                const line = document.createElement('div');
-                line.className = 'grid-line grid-line-h';
-                line.style.top = y + 'px';
-                vizElem.appendChild(line);
+              // Create grid lines for visualization
+              function createGrid() {
+                const vizElem = document.getElementById('visualization');
+                if (!vizElem) return;
                 
-                // Add coordinate label
-                const label = document.createElement('div');
-                label.className = 'coordinate-label';
-                label.textContent = (1 - i / 2).toFixed(1);
-                label.style.top = (y - 8) + 'px';
-                label.style.left = '2px';
-                vizElem.appendChild(label);
-              }
-              
-              // Create vertical grid lines (5 lines)
-              for (let i = 0; i <= 4; i++) {
-                const x = (i / 4) * width;
-                const line = document.createElement('div');
-                line.className = 'grid-line grid-line-v';
-                line.style.left = x + 'px';
-                vizElem.appendChild(line);
+                // Clear existing grid
+                const existingGridLines = vizElem.querySelectorAll('.grid-line, .coordinate-label');
+                existingGridLines.forEach(line => line.remove());
                 
-                // Add coordinate label
-                const label = document.createElement('div');
-                label.className = 'coordinate-label';
-                label.textContent = (i / 2 - 1).toFixed(1);
-                label.style.left = (x - 8) + 'px';
-                label.style.top = (height - 15) + 'px';
-                vizElem.appendChild(label);
-              }
-            }
-            
-            // Create grid on load
-            window.addEventListener('load', createGrid);
-            window.addEventListener('resize', createGrid);
-            
-            // Update points per second every second
-            setInterval(function() {
-              const elapsedSeconds = (Date.now() - startTime) / 1000;
-              const pps = (pointsCollected / elapsedSeconds).toFixed(1);
-              document.getElementById('pointsPerSecond').textContent = pps;
-              
-              // Update calibration status
-              if (window.opener && window.opener.screenCoordinatePlane) {
-                const plane = window.opener.screenCoordinatePlane;
-                if (plane.initialized) {
-                  document.getElementById('calibrationStatus').textContent = 'Calibrated';
-                  document.getElementById('calibrationStatus').style.color = '#4CAF50';
+                if (!showGrid) return;
+                
+                const width = vizElem.offsetWidth;
+                const height = vizElem.offsetHeight;
+                
+                // Create horizontal grid lines (5 lines)
+                for (let i = 0; i <= 4; i++) {
+                  const y = (i / 4) * height;
+                  const line = document.createElement('div');
+                  line.className = 'grid-line grid-line-h';
+                  line.style.top = y + 'px';
+                  vizElem.appendChild(line);
                   
-                  // Update mapping quality based on calibration points
-                  if (window.opener.trackingAccuracy) {
-                    const quality = window.opener.trackingAccuracy;
-                    const avgError = ((quality.x + quality.y) / 2).toFixed(3);
-                    document.getElementById('mappingQuality').textContent = 
-                      \`Average Error: \${avgError} (x: \${quality.x.toFixed(3)}, y: \${quality.y.toFixed(3)})\`;
-                  }
+                  // Add coordinate label
+                  const label = document.createElement('div');
+                  label.className = 'coordinate-label';
+                  label.textContent = (1 - i / 2).toFixed(1);
+                  label.style.top = (y - 8) + 'px';
+                  label.style.left = '2px';
+                  vizElem.appendChild(label);
+                }
+                
+                // Create vertical grid lines (5 lines)
+                for (let i = 0; i <= 4; i++) {
+                  const x = (i / 4) * width;
+                  const line = document.createElement('div');
+                  line.className = 'grid-line grid-line-v';
+                  line.style.left = x + 'px';
+                  vizElem.appendChild(line);
+                  
+                  // Add coordinate label
+                  const label = document.createElement('div');
+                  label.className = 'coordinate-label';
+                  label.textContent = (i / 2 - 1).toFixed(1);
+                  label.style.left = (x - 8) + 'px';
+                  label.style.top = (height - 15) + 'px';
+                  vizElem.appendChild(label);
                 }
               }
-            }, 1000);
-            
-            // Setup event handlers
-            document.getElementById('exportBtn').addEventListener('click', function() {
-              const csvContent = "data:text/csv;charset=utf-8," + 
-                "timestamp,x,y\\n" + 
-                window.opener.allGazeData.map(p => p.timestamp + "," + p.x + "," + p.y).join("\\n");
               
-              const encodedUri = encodeURI(csvContent);
-              const link = document.createElement("a");
-              link.setAttribute("href", encodedUri);
-              link.setAttribute("download", "gaze_data_" + new Date().toISOString() + ".csv");
-              document.body.appendChild(link);
-              link.click();
-              document.body.removeChild(link);
-            });
-            
-            document.getElementById('clearBtn').addEventListener('click', function() {
-              document.getElementById('log').innerHTML = "";
-              document.getElementById('visualization').innerHTML = "";
-              document.getElementById('heatmap').innerHTML = "";
-              document.getElementById('pointCount').textContent = "0";
-              document.getElementById('lastCoords').textContent = "None";
-              pointsCollected = 0;
-              startTime = Date.now();
-              createGrid();
-            });
-            
-            document.getElementById('toggleHeatmapBtn').addEventListener('click', function() {
-              showHeatmap = !showHeatmap;
-              document.getElementById('heatmap').style.display = showHeatmap ? 'block' : 'none';
-              this.textContent = showHeatmap ? 'Hide Heatmap' : 'Show Heatmap';
-            });
-            
-            document.getElementById('toggleGridBtn').addEventListener('click', function() {
-              showGrid = !showGrid;
-              this.textContent = showGrid ? 'Hide Grid' : 'Show Grid';
-              createGrid();
-            });
-          </script>
+              // Create grid on load
+              window.addEventListener('load', createGrid);
+              window.addEventListener('resize', createGrid);
+              
+              // Update points per second every second
+              setInterval(function() {
+                const elapsedSeconds = (Date.now() - startTime) / 1000;
+                const pps = (pointsCollected / elapsedSeconds).toFixed(1);
+                document.getElementById('pointsPerSecond').textContent = pps;
+                
+                // Update calibration status
+                if (window.opener && window.opener.screenCoordinatePlane) {
+                  const plane = window.opener.screenCoordinatePlane;
+                  if (plane.initialized) {
+                    document.getElementById('calibrationStatus').textContent = 'Calibrated';
+                    document.getElementById('calibrationStatus').style.color = '#4CAF50';
+                    
+                    // Update mapping quality based on calibration points
+                    if (window.opener.trackingAccuracy) {
+                      const quality = window.opener.trackingAccuracy;
+                      const avgError = ((quality.x + quality.y) / 2).toFixed(3);
+                      document.getElementById('mappingQuality').textContent = 
+                        \`Average Error: \${avgError} (x: \${quality.x.toFixed(3)}, y: \${quality.y.toFixed(3)})\`;
+                    }
+                  }
+                }
+              }, 1000);
+              
+              // Setup event handlers
+              document.getElementById('exportBtn').addEventListener('click', function() {
+                const csvContent = "data:text/csv;charset=utf-8," + 
+                  "timestamp,x,y\\n" + 
+                  window.opener.allGazeData.map(p => p.timestamp + "," + p.x + "," + p.y).join("\\n");
+                
+                const encodedUri = encodeURI(csvContent);
+                const link = document.createElement("a");
+                link.setAttribute("href", encodedUri);
+                link.setAttribute("download", "gaze_data_" + new Date().toISOString() + ".csv");
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+              });
+              
+              document.getElementById('clearBtn').addEventListener('click', function() {
+                document.getElementById('log').innerHTML = "";
+                document.getElementById('visualization').innerHTML = "";
+                document.getElementById('heatmap').innerHTML = "";
+                document.getElementById('pointCount').textContent = "0";
+                document.getElementById('lastCoords').textContent = "None";
+                pointsCollected = 0;
+                startTime = Date.now();
+                createGrid();
+              });
+              
+              document.getElementById('toggleHeatmapBtn').addEventListener('click', function() {
+                showHeatmap = !showHeatmap;
+                document.getElementById('heatmap').style.display = showHeatmap ? 'block' : 'none';
+                this.textContent = showHeatmap ? 'Hide Heatmap' : 'Show Heatmap';
+              });
+              
+              document.getElementById('toggleGridBtn').addEventListener('click', function() {
+                showGrid = !showGrid;
+                this.textContent = showGrid ? 'Hide Grid' : 'Show Grid';
+                createGrid();
+              });
+            </script>
+          </div>
         </body>
         </html>
       `);
@@ -2249,6 +2312,8 @@ function startGazeLogging() {
       window.gazeDebugWindow.focus();
       
       console.log('Gaze debug window created successfully');
+      console.log('%c✅ GAZE TRACKING WINDOW OPENED SUCCESSFULLY! ✅', 'background: #4CAF50; color: white; padding: 4px; font-size: 14px; font-weight: bold;');
+      console.log('If you don\'t see the gaze tracking window, check for popup blockers or browser settings');
     } else {
       console.warn('Failed to create gaze debug window - popup might be blocked');
       
@@ -2400,7 +2465,7 @@ function startGazeLogging() {
             <!DOCTYPE html>
             <html>
             <head>
-              <title>WebGazer Gaze Data Visualization</title>
+              <title>👁️ GAZE TRACKING COORDINATES 👁️</title>
               <style>
                 body { 
                   font-family: Arial, sans-serif; 
@@ -2408,7 +2473,6 @@ function startGazeLogging() {
                   padding: 10px; 
                   background-color: #f0f0f0;
                 }
-                /* Rest of the styles... */
                 h2 { margin-top: 0; color: #333; text-align: center; }
                 #stats { margin-bottom: 15px; padding: 10px; background: #fff; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
                 #log { height: 150px; overflow: auto; border: 1px solid #ccc; padding: 10px; font-family: monospace; font-size: 12px; background: #fff; border-radius: 5px; margin-bottom: 15px; }
@@ -2623,16 +2687,144 @@ async function initializeWebGazer() {
         await window.webgazer.setRegression('ridge')
           .setTracker('TFFacemesh')
           .setGazeListener(function(data, timestamp) {
-            // This is just a placeholder - our detailed listener will be set up later
+            // Ignore null data points
             if (data == null) return;
             
-            // Store eye gaze position
+            // Store eye gaze position in global variables for immediate access
             window.currentGazeX = data.x;
             window.currentGazeY = data.y;
+            
+            // Create detailed data point with metadata
+            const dataPoint = {
+              timestamp: Date.now(),
+              x: data.x,
+              y: data.y,
+              elapsedTime: timestamp,
+              eyeFeatures: data.eyeFeatures || null,
+              trialIndex: psychoJS.experiment ? psychoJS.experiment.thisN || -1 : -1,
+              trialPhase: psychoJS.experiment && psychoJS.experiment.currentScheduler ? 
+                psychoJS.experiment.currentScheduler.taskName || 'unknown' : 'unknown'
+            };
+            
+            // Store in global arrays for persistence and different use cases
+            
+            // Primary storage for all gaze data
+            if (!window.allGazeData) {
+              window.allGazeData = [];
+            }
+            window.allGazeData.push(dataPoint);
+            
+            // For moving average calculations (if used in the experiment)
+            if (window.xGazes && window.yGazes) {
+              window.xGazes.shift();
+              window.xGazes.push(data.x);
+              window.yGazes.shift();
+              window.yGazes.push(data.y);
+            }
+            
+            // For buffered exports to reduce memory pressure
+            if (window.gazeDataBuffer) {
+              window.gazeDataBuffer.push(dataPoint);
+              
+              // Auto-export if buffer gets too large
+              if (window.gazeDataBuffer.length > 100 && 
+                  typeof window.exportGazeData === 'function') {
+                window.exportGazeData();
+              }
+            }
+            
+            // Log to console periodically to avoid flooding
+            if (window.allGazeData.length % 50 === 0) {
+              console.log(`Gaze data point collected: [${dataPoint.x.toFixed(2)}, ${dataPoint.y.toFixed(2)}] - Total: ${window.allGazeData.length}`);
+            }
+            
+            // Update visualization if debug window exists
+            if (window.gazeDebugWindow && !window.gazeDebugWindow.closed) {
+              try {
+                const logElem = window.gazeDebugWindow.document.getElementById('log');
+                const statsElem = window.gazeDebugWindow.document.getElementById('pointCount');
+                const lastCoordsElem = window.gazeDebugWindow.document.getElementById('lastCoords');
+                const vizElem = window.gazeDebugWindow.document.getElementById('visualization');
+                const heatmapElem = window.gazeDebugWindow.document.getElementById('heatmap');
+                
+                if (logElem && statsElem && lastCoordsElem) {
+                  // Update stats
+                  statsElem.textContent = window.allGazeData.length;
+                  lastCoordsElem.textContent = `x: ${dataPoint.x.toFixed(2)}, y: ${dataPoint.y.toFixed(2)}`;
+                  
+                  // Increment points collected for rate calculation
+                  window.gazeDebugWindow.pointsCollected++;
+                  
+                  // Add to log (limiting to last 50 entries)
+                  const entry = window.gazeDebugWindow.document.createElement('div');
+                  entry.textContent = `[${new Date(dataPoint.timestamp).toLocaleTimeString()}] x: ${dataPoint.x.toFixed(2)}, y: ${dataPoint.y.toFixed(2)}`;
+                  logElem.appendChild(entry);
+                  
+                  // Keep only last 50 entries to prevent browser slowdown
+                  while (logElem.childNodes.length > 50) {
+                    logElem.removeChild(logElem.firstChild);
+                  }
+                  
+                  // Scroll to bottom
+                  logElem.scrollTop = logElem.scrollHeight;
+                  
+                  // Add point to visualization (every 3rd point to avoid clutter)
+                  if (window.allGazeData.length % 3 === 0 && vizElem) {
+                    const screenWidth = window.screenWidth || window.screen.width;
+                    const screenHeight = window.screenHeight || window.screen.height;
+                    
+                    // Normalize to visualization area
+                    const vizWidth = vizElem.offsetWidth;
+                    const vizHeight = vizElem.offsetHeight;
+                    const normalizedX = (dataPoint.x / screenWidth) * vizWidth;
+                    const normalizedY = (dataPoint.y / screenHeight) * vizHeight;
+                    
+                    const point = window.gazeDebugWindow.document.createElement('div');
+                    point.className = 'point';
+                    point.style.left = `${normalizedX}px`;
+                    point.style.top = `${normalizedY}px`;
+                    vizElem.appendChild(point);
+                    
+                    // Limit visualization points
+                    while (vizElem.childNodes.length > 100) {
+                      vizElem.removeChild(vizElem.firstChild);
+                    }
+                    
+                    // Add to heatmap (every 5th point)
+                    if (window.allGazeData.length % 5 === 0 && heatmapElem) {
+                      const heatpoint = window.gazeDebugWindow.document.createElement('div');
+                      heatpoint.className = 'heatpoint';
+                      heatpoint.style.left = `${normalizedX}px`;
+                      heatpoint.style.top = `${normalizedY}px`;
+                      heatmapElem.appendChild(heatpoint);
+                      
+                      // Limit heatmap points
+                      while (heatmapElem.childNodes.length > 200) {
+                        heatmapElem.removeChild(heatmapElem.firstChild);
+                      }
+                    }
+                  }
+                }
+              } catch (e) {
+                console.error('Error updating gaze debug window:', e);
+              }
+            }
+            
+            // Fire custom event for any external listeners
+            const gazeEvent = new CustomEvent('gazeDataCollected', { 
+              detail: dataPoint
+            });
+            window.dispatchEvent(gazeEvent);
           })
           .begin();
         
         console.log('WebGazer core initialized successfully');
+        
+        // Immediately open gaze tracking debug window after successful initialization
+        console.log('Opening gaze tracking debug window...');
+        // Call startGazeLogging directly to ensure window opens immediately
+        startGazeLogging();
+        
       } catch (initErr) {
         console.error('Error during WebGazer core initialization:', initErr);
         // Try with fallback settings
@@ -2642,6 +2834,10 @@ async function initializeWebGazer() {
             .setTracker('clmtrackr')
             .begin();
           console.log('WebGazer initialized with fallback settings');
+          
+          // Also try to open debug window after fallback initialization
+          console.log('Opening gaze tracking debug window (after fallback)...');
+          startGazeLogging();
         } catch (fallbackErr) {
           throw new Error(`Failed to initialize WebGazer with fallback settings: ${fallbackErr.message}`);
         }
@@ -2655,17 +2851,17 @@ async function initializeWebGazer() {
         document.getElementById('webgazerVideoFeed').style.display = 'block';
       }
       
-      // Start the robust fallback data logging system with retry
-      let loggingSuccess = false;
-      let retryCount = 0;
+      // Only do additional retry attempts if the debug window isn't available yet
+      let loggingSuccess = window.gazeDebugWindow && !window.gazeDebugWindow.closed;
+      let retryCount = loggingSuccess ? 3 : 1; // Skip retries if window is already open
       const maxRetries = 3;
       
       while (!loggingSuccess && retryCount < maxRetries) {
         try {
-          console.log(`Starting gaze logging (attempt ${retryCount + 1})...`);
+          console.log(`Starting gaze logging (additional attempt ${retryCount + 1})...`);
           startGazeLogging();
           loggingSuccess = true;
-          console.log('Gaze logging started successfully');
+          console.log('Gaze logging started successfully on retry');
         } catch (loggingErr) {
           console.error(`Error starting gaze logging (attempt ${retryCount + 1}):`, loggingErr);
           retryCount++;

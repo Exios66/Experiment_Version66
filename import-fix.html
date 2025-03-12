@@ -256,6 +256,70 @@
         visual: {
           TextStim: function() { return this; },
           ImageStim: function() { return this; }
+        },
+        // Add GUI stub implementation
+        gui: {
+          DlgFromDict: function(params) {
+            addDebugMessage('PsychoJS.gui.DlgFromDict called with: ' + JSON.stringify(params));
+            
+            // Create a simple dialog component
+            this.dialogComponent = {
+              button: 'OK',  // Default to OK so the experiment will continue
+              data: params.dictionary || {}
+            };
+            
+            // Show a simple form for participant information
+            const expInfoDiv = document.createElement('div');
+            expInfoDiv.id = 'expInfoDiv';
+            expInfoDiv.style = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; color: black; padding: 20px; border-radius: 5px; box-shadow: 0 0 15px rgba(0,0,0,0.5); z-index: 9999;';
+            
+            // Create a form
+            let formHtml = `
+              <h2>${params.title || 'Experiment Information'}</h2>
+              <form id="expInfoForm">`;
+            
+            // Add fields based on the dictionary
+            for (const key in params.dictionary) {
+              const value = params.dictionary[key];
+              formHtml += `
+                <div style="margin-bottom: 15px;">
+                  <label for="${key}" style="display: block; margin-bottom: 5px;">${key}</label>
+                  <input type="text" id="${key}" name="${key}" value="${value}" style="padding: 5px; width: 100%;">
+                </div>`;
+            }
+            
+            // Add submit button
+            formHtml += `
+                <div style="text-align: center; margin-top: 20px;">
+                  <button type="submit" style="background: #4CAF50; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer;">Start Experiment</button>
+                </div>
+              </form>`;
+            
+            expInfoDiv.innerHTML = formHtml;
+            document.body.appendChild(expInfoDiv);
+            
+            // Handle form submission
+            document.getElementById('expInfoForm').addEventListener('submit', (e) => {
+              e.preventDefault();
+              
+              // Update the dictionary with form values
+              for (const key in params.dictionary) {
+                const inputElement = document.getElementById(key);
+                if (inputElement) {
+                  this.dialogComponent.data[key] = inputElement.value;
+                  params.dictionary[key] = inputElement.value;
+                }
+              }
+              
+              // Remove the form
+              document.body.removeChild(expInfoDiv);
+              
+              addDebugMessage('Experiment info collected: ' + JSON.stringify(this.dialogComponent.data));
+              updateStatus('Starting experiment...');
+            });
+            
+            return this;
+          }
         }
       };
       
@@ -270,11 +334,19 @@
         try {
           // Copy imported module components to the global psychoJS object
           if (psychoJSModule) {
+            // Save our custom gui implementation
+            const customGui = window.psychoJS.gui;
+            
+            // Copy module components
             window.psychoJS.core = psychoJSModule.core;
             window.psychoJS.data = psychoJSModule.data;
             window.psychoJS.sound = psychoJSModule.sound;
             window.psychoJS.util = psychoJSModule.util;
             window.psychoJS.visual = psychoJSModule.visual;
+            
+            // Restore our custom GUI implementation
+            window.psychoJS.gui = customGui;
+            
             addDebugMessage('PsychoJS library imported successfully as ES module');
           }
         } catch (error) {
@@ -323,23 +395,35 @@
         // Give libraries time to initialize
         setTimeout(function() {
           addDebugMessage('Loading experiment script');
-          var script = document.createElement('script');
-          script.src = './extended_session_experiment-no-modules.js';
-          script.onload = function() {
-            addDebugMessage('Experiment script loaded successfully');
-            
-            // Hide status after successful load
-            setTimeout(function() {
-              var statusEl = document.getElementById('status-message');
-              if (statusEl) statusEl.style.display = 'none';
-            }, 2000);
-          };
-          script.onerror = function() {
-            addDebugMessage('Failed to load experiment script');
-            showError('Failed to load experiment script');
-          };
-          document.body.appendChild(script);
-        }, 2000); // Increased timeout to give ES module more time to load
+          
+          try {
+            var script = document.createElement('script');
+            script.src = './extended_session_experiment-no-modules.js';
+            script.onload = function() {
+              addDebugMessage('Experiment script loaded successfully');
+              
+              // Check for GUI errors
+              if (window.psychoJS && !window.psychoJS.gui) {
+                addDebugMessage('WARNING: PsychoJS GUI not initialized correctly');
+                showError('PsychoJS GUI initialization error. The experiment may not run correctly.');
+              }
+              
+              // Hide status after successful load
+              setTimeout(function() {
+                var statusEl = document.getElementById('status-message');
+                if (statusEl) statusEl.style.display = 'none';
+              }, 2000);
+            };
+            script.onerror = function(error) {
+              addDebugMessage('Failed to load experiment script: ' + error);
+              showError('Failed to load experiment script', error);
+            };
+            document.head.appendChild(script);
+          } catch (error) {
+            addDebugMessage('Exception while loading experiment script: ' + error);
+            showError('Exception while loading experiment script', error);
+          }
+        }, 1000); // Wait a second to ensure PsychoJS is fully initialized
       });
     </script>
   </head>

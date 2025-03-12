@@ -1,4 +1,5 @@
 {
+  "$schema": "https://aka.ms/vscode-package-schema",
   "name": "extended-session-experiment",
   "version": "1.0.0",
   "description": "Extended session experiment with eye tracking",
