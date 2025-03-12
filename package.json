@@ -4,7 +4,7 @@
   "description": "Extended session experiment with eye tracking",
   "main": "start-server.js",
   "scripts": {
-    "start": "node start-server.js",
+    "start": "node server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
@@ -14,10 +14,16 @@
   ],
   "author": "",
   "license": "ISC",
+  "knownPages": [
+    "/webgazer-test.html",
+    "/resource-test.html",
+    "/direct-experiment.html"
+  ],
   "dependencies": {
     "http": "0.0.1-security",
     "path": "^0.12.7",
     "url": "^0.11.0",
-    "fs": "0.0.1-security"
+    "fs": "0.0.1-security",
+    "express": "^4.17.1"
   }
 } 
