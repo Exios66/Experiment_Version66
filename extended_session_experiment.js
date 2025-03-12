@@ -331,6 +331,10 @@ async function experimentInit() {
   initializeEyetrackingClock = new util.Clock();
   //initialize params of the webgazer package (used for eye tracking)
   
+  // Add these lines to ensure global variables are properly initialized
+  window.calibration_x = 0;
+  window.calibration_y = 0;
+  
   // Initialize global array to store all gaze data points
   window.allGazeData = [];
   
@@ -704,43 +708,135 @@ function initializeEyetrackingRoutineBegin(snapshot) {
     // Start eye tracking with enhanced data collection
     window.webgazer
         // Called on each eye tracking update
-        .setGazeListener(function(data, clock) {
-          if (data !== null) {
-            // Remove first element from gazes array, add current gaze at the end
+        .setGazeListener(function(data, timestamp) {
+          // Ignore null data points
+          if (data == null) return;
+          
+          // Store eye gaze position in global variables for immediate access
+          window.currentGazeX = data.x;
+          window.currentGazeY = data.y;
+          
+          // Create detailed data point with metadata
+          const dataPoint = {
+            timestamp: Date.now(),
+            x: data.x,
+            y: data.y,
+            elapsedTime: timestamp,
+            eyeFeatures: data.eyeFeatures || null,
+            trialIndex: psychoJS.experiment ? psychoJS.experiment.thisN || -1 : -1,
+            trialPhase: psychoJS.experiment && psychoJS.experiment.currentScheduler ? 
+              psychoJS.experiment.currentScheduler.taskName || 'unknown' : 'unknown'
+          };
+          
+          // Store in global arrays for persistence and different use cases
+          
+          // Primary storage for all gaze data
+          if (!window.allGazeData) {
+            window.allGazeData = [];
+          }
+          window.allGazeData.push(dataPoint);
+          
+          // For moving average calculations (if used in the experiment)
+          if (window.xGazes && window.yGazes) {
             window.xGazes.shift();
             window.xGazes.push(data.x);
             window.yGazes.shift();
             window.yGazes.push(data.y);
+          }
+          
+          // For buffered exports to reduce memory pressure
+          if (window.gazeDataBuffer) {
+            window.gazeDataBuffer.push(dataPoint);
             
-            // Store gaze data for export
-            window.gazeDataBuffer.push({
-              timestamp: Date.now(),
-              x: data.x,
-              y: data.y,
-              eyeFeatures: data.eyeFeatures || null,
-              trialIndex: psychoJS.experiment.thisN || -1,
-              trialPhase: psychoJS.experiment.currentScheduler?.taskName || 'unknown'
-            });
-            
-            // Add to master data store for persistence
-            if (!window.masterGazeData) {
-              window.masterGazeData = [];
-            }
-            window.masterGazeData.push({
-              timestamp: Date.now(),
-              x: data.x,
-              y: data.y,
-              eyeFeatures: data.eyeFeatures || null,
-              trialIndex: psychoJS.experiment.thisN || -1,
-              trialPhase: psychoJS.experiment.currentScheduler?.taskName || 'unknown'
-            });
-            
-            // Export if buffer gets too large or time interval has passed
-            if (window.gazeDataBuffer.length > 100 || 
-                (Date.now() - window.lastExportTime) > window.gazeExportInterval) {
-              exportGazeData();
+            // Auto-export if buffer gets too large
+            if (window.gazeDataBuffer.length > 100 && 
+                typeof window.exportGazeData === 'function') {
+              window.exportGazeData();
             }
           }
+          
+          // Log to console periodically to avoid flooding
+          if (window.allGazeData.length % 50 === 0) {
+            console.log(`Gaze data point collected: [${dataPoint.x.toFixed(2)}, ${dataPoint.y.toFixed(2)}] - Total: ${window.allGazeData.length}`);
+          }
+          
+          // Update visualization if debug window exists
+          if (window.gazeDebugWindow && !window.gazeDebugWindow.closed) {
+            try {
+              const logElem = window.gazeDebugWindow.document.getElementById('log');
+              const statsElem = window.gazeDebugWindow.document.getElementById('pointCount');
+              const lastCoordsElem = window.gazeDebugWindow.document.getElementById('lastCoords');
+              const vizElem = window.gazeDebugWindow.document.getElementById('visualization');
+              const heatmapElem = window.gazeDebugWindow.document.getElementById('heatmap');
+              
+              if (logElem && statsElem && lastCoordsElem) {
+                // Update stats
+                statsElem.textContent = window.allGazeData.length;
+                lastCoordsElem.textContent = `x: ${dataPoint.x.toFixed(2)}, y: ${dataPoint.y.toFixed(2)}`;
+                
+                // Increment points collected for rate calculation
+                window.gazeDebugWindow.pointsCollected++;
+                
+                // Add to log (limiting to last 50 entries)
+                const entry = window.gazeDebugWindow.document.createElement('div');
+                entry.textContent = `[${new Date(dataPoint.timestamp).toLocaleTimeString()}] x: ${dataPoint.x.toFixed(2)}, y: ${dataPoint.y.toFixed(2)}`;
+                logElem.appendChild(entry);
+                
+                // Keep only last 50 entries to prevent browser slowdown
+                while (logElem.childNodes.length > 50) {
+                  logElem.removeChild(logElem.firstChild);
+                }
+                
+                // Scroll to bottom
+                logElem.scrollTop = logElem.scrollHeight;
+                
+                // Add point to visualization (every 3rd point to avoid clutter)
+                if (window.allGazeData.length % 3 === 0 && vizElem) {
+                  const screenWidth = window.screenWidth || window.screen.width;
+                  const screenHeight = window.screenHeight || window.screen.height;
+                  
+                  // Normalize to visualization area
+                  const vizWidth = vizElem.offsetWidth;
+                  const vizHeight = vizElem.offsetHeight;
+                  const normalizedX = (dataPoint.x / screenWidth) * vizWidth;
+                  const normalizedY = (dataPoint.y / screenHeight) * vizHeight;
+                  
+                  const point = window.gazeDebugWindow.document.createElement('div');
+                  point.className = 'point';
+                  point.style.left = `${normalizedX}px`;
+                  point.style.top = `${normalizedY}px`;
+                  vizElem.appendChild(point);
+                  
+                  // Limit visualization points
+                  while (vizElem.childNodes.length > 100) {
+                    vizElem.removeChild(vizElem.firstChild);
+                  }
+                  
+                  // Add to heatmap (every 5th point)
+                  if (window.allGazeData.length % 5 === 0 && heatmapElem) {
+                    const heatpoint = window.gazeDebugWindow.document.createElement('div');
+                    heatpoint.className = 'heatpoint';
+                    heatpoint.style.left = `${normalizedX}px`;
+                    heatpoint.style.top = `${normalizedY}px`;
+                    heatmapElem.appendChild(heatpoint);
+                    
+                    // Limit heatmap points
+                    while (heatmapElem.childNodes.length > 200) {
+                      heatmapElem.removeChild(heatmapElem.firstChild);
+                    }
+                  }
+                }
+              }
+            } catch (e) {
+              console.error('Error updating gaze debug window:', e);
+            }
+          }
+          
+          // Fire custom event for any external listeners
+          const gazeEvent = new CustomEvent('gazeDataCollected', { 
+            detail: dataPoint
+          });
+          window.dispatchEvent(gazeEvent);
         })
         .begin();
     
@@ -1166,6 +1262,23 @@ function calibrationRoutineBegin(snapshot) {
       calibration_y = 0;
     }
     
+    // Enhance defensive coding by ensuring global window variables are also set
+    if (typeof window.calibration_x === 'undefined') {
+      console.log("Warning: window.calibration_x was undefined. Using default value of 0.");
+      window.calibration_x = 0;
+    }
+    if (typeof window.calibration_y === 'undefined') {
+      console.log("Warning: window.calibration_y was undefined. Using default value of 0.");
+      window.calibration_y = 0;
+    }
+    
+    // Ensure local variables use window global values if available
+    calibration_x = window.calibration_x;
+    calibration_y = window.calibration_y;
+    
+    // Log coordinates for debugging
+    console.log(`Using calibration coordinates: x=${calibration_x}, y=${calibration_y}`);
+    
     // Position calibration_square using width and height of window
     var canvas = psychoJS.window.size;
     var scaling = [
@@ -1276,8 +1389,33 @@ function calibrationRoutineEachFrame() {
       calibrationDot.tStart = t;  // (not accounting for frame time here)
       calibrationDot.frameNStart = frameN;  // exact frame index
       
+      // Ensure calibration coordinates are defined before using them
+      let x = 0;
+      let y = 0;
+      
+      // Try to get values from multiple possible sources with fallbacks
+      if (typeof calibration_x !== 'undefined') {
+        x = calibration_x;
+      } else if (typeof window.calibration_x !== 'undefined') {
+        x = window.calibration_x;
+        console.log("Using window.calibration_x as fallback");
+      } else {
+        console.warn("calibration_x is undefined, using 0");
+      }
+      
+      if (typeof calibration_y !== 'undefined') {
+        y = calibration_y;
+      } else if (typeof window.calibration_y !== 'undefined') {
+        y = window.calibration_y;
+        console.log("Using window.calibration_y as fallback");
+      } else {
+        console.warn("calibration_y is undefined, using 0");
+      }
+      
+      console.log(`Setting calibration dot position to [${x}, ${y}]`);
+      
       calibrationDot.setAutoDraw(true);
-      calibrationDot.setPos([calibration_x, calibration_y]);
+      calibrationDot.setPos([x, y]);
     }
 
     if (calibrationDot.status === PsychoJS.Status.STARTED && t >= frameRemains) {
@@ -1768,26 +1906,7 @@ function importConditions(currentLoop) {
     
     // Map the CSV column names to the variable names used in the code
     if (typeof currentTrial.Calibrate_X !== 'undefined') {
-      window.calibration_x = currentTrial.Calibrate_X;
-    }
-    
-    if (typeof currentTrial.Calibrate_Y !== 'undefined') {
-      window.calibrationTxt = currentTrial.Calibrate_Y;
-    }
-    
-    return Scheduler.Event.NEXT;
-  };
-}
-
-// Replace with:
-
-function importConditions(currentLoop) {
-  return async function () {
-    const currentTrial = currentLoop.getCurrentTrial();
-    psychoJS.importAttributes(currentTrial);
-    
-    // Map the CSV column names to the variable names used in the code
-    if (typeof currentTrial.Calibrate_X !== 'undefined') {
+      // Bug fix: properly set the Y coordinate rather than overwriting calibrationTxt
       window.calibration_x = currentTrial.Calibrate_X;
     }
     
