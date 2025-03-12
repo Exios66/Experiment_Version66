@@ -209,6 +209,9 @@
     <script src="https://cdn.jsdelivr.net/npm/jquery-ui-dist@1.12.1/jquery-ui.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/preloadjs@1.0.1/lib/preloadjs.min.js"></script>
     
+    <!-- Load PsychoJS as a regular script (not module) -->
+    <script src="./lib/psychojs-2021.2.3.iife.js"></script>
+    
     <!-- Make safe global functions available -->
     <script>
       // Expose helper functions to window
@@ -426,10 +429,28 @@
               addDebugMessage('Experiment info collected: ' + JSON.stringify(this.dialogComponent.data));
               updateStatus('Starting experiment...');
               
-              // Ensure the experiment continues by manually triggering the condition check
-              // This is important for the flow scheduler to continue
-              if (window._psychoJSSchedulerConditionCallback) {
-                setTimeout(window._psychoJSSchedulerConditionCallback, 100);
+              // Force the experiment to continue
+              try {
+                // Directly check if we can trigger the condition callback
+                if (window._psychoJSSchedulerConditionCallback) {
+                  addDebugMessage('Manually triggering experiment flow');
+                  setTimeout(window._psychoJSSchedulerConditionCallback, 100);
+                } else {
+                  // Alternative approach - directly trigger the flow scheduler
+                  const psychoJS = window.psychoJS;
+                  if (psychoJS && psychoJS._scheduler) {
+                    addDebugMessage('Directly starting flow scheduler');
+                    psychoJS._scheduler.start();
+                  } else {
+                    // If we can't find the scheduler, simulate a button click to continue
+                    addDebugMessage('Using alternative flow continuation method');
+                    const event = new Event('psychojs-gui-dialog-complete');
+                    document.dispatchEvent(event);
+                  }
+                }
+              } catch (error) {
+                addDebugMessage('Error trying to continue experiment flow: ' + error);
+                showError('Error trying to continue experiment: ' + error);
               }
             });
             
@@ -442,36 +463,100 @@
     </script>
     
     <!-- Load real PsychoJS -->
-    <script type="module">
-      import * as psychoJSModule from './lib/psychojs-2021.2.3.js';
-      
-      function initPsychoJS() {
+    <script>
+      // Create a simplified manual initialization of PsychoJS that doesn't rely on modules
+      function initPsychoJSManually() {
         try {
-          // Copy imported module components to the global psychoJS object
-          if (psychoJSModule) {
-            // Save our custom gui implementation
-            const customGui = window.psychoJS.gui;
-            
-            // Copy module components
-            window.psychoJS.core = psychoJSModule.core;
-            window.psychoJS.data = psychoJSModule.data;
-            window.psychoJS.sound = psychoJSModule.sound;
-            window.psychoJS.util = psychoJSModule.util;
-            window.psychoJS.visual = psychoJSModule.visual;
-            
-            // Restore our custom GUI implementation
-            window.psychoJS.gui = customGui;
-            
-            addDebugMessage('PsychoJS library imported successfully as ES module');
+          // Skip if it's already been initialized correctly
+          if (window.psychoJS && window.psychoJS._initialized) {
+            return;
           }
+          
+          addDebugMessage('Manually initializing PsychoJS');
+          
+          // Create the core PsychoJS instance constructor
+          const PsychoJS = function(params) {
+            this._scheduler = null;
+            this.gui = window.psychoJS.gui; // Keep our GUI implementation
+            this.debug = params.debug || false;
+            this.collectIP = params.collectIP || false;
+            this.hosts = params.hosts || window.psychoJS.hosts;
+            
+            // Store experiment info
+            this.experimentName = 'extended_session_experiment';
+            this.experimentInfo = {'participant': '', 'session': '001'};
+            
+            // Window functionality
+            this.window = null;
+            this.openWindow = function(params) {
+              addDebugMessage('PsychoJS.openWindow called');
+              this.window = {
+                units: params.units || 'height',
+                size: [window.innerWidth, window.innerHeight],
+                color: params.color || [0, 0, 0],
+                fullscr: params.fullscr || false
+              };
+              return this;
+            };
+            
+            // Scheduling
+            this.schedule = function(task) {
+              addDebugMessage('PsychoJS.schedule called');
+              return this;
+            };
+            
+            this.scheduleCondition = function(condition, thenScheduler, elseScheduler) {
+              addDebugMessage('PsychoJS.scheduleCondition called');
+              this._flowScheduler = thenScheduler;
+              this._cancelScheduler = elseScheduler;
+              
+              window._psychoJSSchedulerConditionCallback = function() {
+                try {
+                  const result = condition();
+                  if (result) {
+                    addDebugMessage('Condition passed, starting flow');
+                    if (thenScheduler) thenScheduler.start();
+                  } else {
+                    addDebugMessage('Condition failed, using cancel flow');
+                    if (elseScheduler) elseScheduler.start();
+                  }
+                } catch (error) {
+                  addDebugMessage('Error checking condition: ' + error);
+                }
+              };
+              
+              return this;
+            };
+            
+            this._initialized = true;
+            return this;
+          };
+          
+          // Create a new PsychoJS instance
+          const params = {
+            debug: true,
+            collectIP: false,
+            hosts: window.psychoJS.hosts
+          };
+          
+          // Save our important custom implementations
+          const customGui = window.psychoJS.gui;
+          
+          // Replace the window.psychoJS with a proper instance
+          window.psychoJS = new PsychoJS(params);
+          
+          // Restore custom implementations
+          window.psychoJS.gui = customGui;
+          
+          addDebugMessage('Manual PsychoJS initialization complete');
         } catch (error) {
-          addDebugMessage('Failed to initialize PsychoJS: ' + error);
-          showError('Failed to initialize PsychoJS library: ' + error);
+          addDebugMessage('Error in manual PsychoJS initialization: ' + error);
+          showError('Failed to initialize PsychoJS manually: ' + error);
         }
       }
       
-      // Initialize PsychoJS after module is loaded
-      initPsychoJS();
+      // Call after PsychoJS module loaded
+      setTimeout(initPsychoJSManually, 500);
     </script>
     
     <!-- Load WebGazer -->
@@ -507,17 +592,72 @@
       document.addEventListener('DOMContentLoaded', function() {
         addDebugMessage('DOM loaded, preparing to load experiment script');
         
+        // Expose some static Event values that the experiment might use
+        window.psychoJS.util.Scheduler = window.psychoJS.util.Scheduler || function(psychoJS) {
+          const scheduler = {
+            _psychoJS: psychoJS,
+            _taskList: [],
+            _currentTask: 0,
+            _stopAtNextUpdate: false,
+            
+            add: function(task) {
+              addDebugMessage('Scheduler.add: Adding task');
+              this._taskList.push(task);
+              return this;
+            },
+            
+            start: function() {
+              addDebugMessage('Scheduler.start: Starting scheduler with ' + this._taskList.length + ' tasks');
+              this._currentTask = 0;
+              this._stopAtNextUpdate = false;
+              setTimeout(() => this._runNextTask(), 10);
+              return this;
+            },
+            
+            _runNextTask: function() {
+              if (this._stopAtNextUpdate || this._currentTask >= this._taskList.length) {
+                return;
+              }
+              
+              try {
+                const task = this._taskList[this._currentTask];
+                addDebugMessage('Scheduler: Running task ' + (this._currentTask + 1) + ' of ' + this._taskList.length);
+                const taskResult = task();
+                this._currentTask++;
+                
+                if (!this._stopAtNextUpdate && this._currentTask < this._taskList.length) {
+                  setTimeout(() => this._runNextTask(), 10);
+                }
+              } catch (error) {
+                addDebugMessage('Error in scheduler task: ' + error);
+                showError('Error in experiment task: ' + error);
+              }
+            }
+          };
+          
+          return scheduler;
+        };
+        
+        // Add Event constants
+        window.psychoJS.util.Scheduler.Event = {
+          NEXT: Symbol('NEXT'),
+          FLIP_REPEAT: Symbol('FLIP_REPEAT'),
+          FLIP_FINISHED: Symbol('FLIP_FINISHED'),
+          QUIT: Symbol('QUIT')
+        };
+        
         // Give libraries time to initialize
         setTimeout(function() {
           addDebugMessage('Loading experiment script');
           
+          // Use the no-modules version which is more compatible
           try {
             var script = document.createElement('script');
             script.src = './extended_session_experiment-no-modules.js';
             script.onload = function() {
               addDebugMessage('Experiment script loaded successfully');
               
-              // Check for GUI errors
+              // Check for errors
               if (window.psychoJS && !window.psychoJS.gui) {
                 addDebugMessage('WARNING: PsychoJS GUI not initialized correctly');
                 showError('PsychoJS GUI initialization error. The experiment may not run correctly.');
@@ -538,7 +678,7 @@
             addDebugMessage('Exception while loading experiment script: ' + error);
             showError('Exception while loading experiment script', error);
           }
-        }, 1000); // Wait a second to ensure PsychoJS is fully initialized
+        }, 1000);
       });
     </script>
   </head>
