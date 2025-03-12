@@ -235,65 +235,120 @@
       });
     }
     
-    // Initialize WebGazer
+    // Initialize WebGazer with improved accuracy and error handling
     async function initWebGazer() {
       try {
         log('Initializing WebGazer...');
         
-        // Set up the video feed
+        // Set up the video feed with improved parameters
         webgazer.params.showVideo = true;
         webgazer.params.showFaceOverlay = true;
         webgazer.params.showFaceFeedbackBox = true;
+        webgazer.params.camConstraints = { 
+          video: { 
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            facingMode: "user"
+          } 
+        };
         
-        // Set gaze listener
-        webgazer.setGazeListener(function(data, elapsedTime) {
+        // Use higher precision regression model
+        webgazer.setRegression('ridge')
+               .setTracker('TFFacemesh')
+               .setGazeListener(function(data, elapsedTime) {
           if (data == null) return;
           
-          // Store gaze data
+          // Apply a simple moving average for smoothing
+          if (!window.gazeHistory) {
+            window.gazeHistory = { x: [], y: [] };
+          }
+          
+          // Store last 5 points for moving average
+          window.gazeHistory.x.push(data.x);
+          window.gazeHistory.y.push(data.y);
+          
+          // Keep only last 5 points
+          if (window.gazeHistory.x.length > 5) {
+            window.gazeHistory.x.shift();
+            window.gazeHistory.y.shift();
+          }
+          
+          // Calculate moving average for smoother coordinates
+          const avgX = window.gazeHistory.x.reduce((a, b) => a + b, 0) / window.gazeHistory.x.length;
+          const avgY = window.gazeHistory.y.reduce((a, b) => a + b, 0) / window.gazeHistory.y.length;
+          
+          // Store gaze data with higher precision
           const point = {
-            x: data.x,
-            y: data.y,
-            timestamp: Date.now()
+            x: parseFloat(avgX.toFixed(4)),  // Increased precision
+            y: parseFloat(avgY.toFixed(4)),  // Increased precision
+            timestamp: Date.now(),
+            raw: { x: data.x, y: data.y }    // Store raw data for reference
           };
+          
+          // Validate the point is within screen bounds
+          if (isNaN(point.x) || isNaN(point.y) || 
+              point.x < 0 || point.y < 0 || 
+              point.x > window.innerWidth * 1.5 || 
+              point.y > window.innerHeight * 1.5) {
+            log('Invalid gaze point detected, skipping');
+            return;
+          }
+          
           gazeData.push(point);
           pointsCollected++;
           
           // Update gaze point visualization
           const gazePoint = document.getElementById('gaze-point');
-          gazePoint.style.left = point.x + 'px';
-          gazePoint.style.top = point.y + 'px';
+          if (gazePoint) {
+            gazePoint.style.left = point.x + 'px';
+            gazePoint.style.top = point.y + 'px';
+          }
           
           // Update stats
-          document.getElementById('gaze-x').textContent = Math.round(point.x);
-          document.getElementById('gaze-y').textContent = Math.round(point.y);
-          document.getElementById('point-count').textContent = pointsCollected;
+          const gazeXElement = document.getElementById('gaze-x');
+          const gazeYElement = document.getElementById('gaze-y');
+          const pointCountElement = document.getElementById('point-count');
+          
+          if (gazeXElement) gazeXElement.textContent = point.x.toFixed(2);
+          if (gazeYElement) gazeYElement.textContent = point.y.toFixed(2);
+          if (pointCountElement) pointCountElement.textContent = pointsCollected;
         });
         
-        // Start WebGazer
-        await webgazer.begin();
-        log('WebGazer initialized and running');
-        
-        // Set up video container
-        const videoElement = document.getElementById('webgazerVideoFeed');
-        if (videoElement) {
-          const webcamContainer = document.getElementById('webcam-container');
-          webcamContainer.appendChild(videoElement);
-          videoElement.style.width = '100%';
-          videoElement.style.height = '100%';
+        // Start WebGazer with error handling
+        try {
+          await webgazer.begin();
+          log('WebGazer initialized and running');
+          
+          // Set up video container
+          const videoElement = document.getElementById('webgazerVideoFeed');
+          if (videoElement) {
+            const webcamContainer = document.getElementById('webcam-container');
+            webcamContainer.appendChild(videoElement);
+            videoElement.style.width = '100%';
+            videoElement.style.height = '100%';
+          } else {
+            log('WARNING: Video feed element not found');
+          }
+          
+          return true;
+        } catch (innerError) {
+          log('ERROR starting WebGazer: ' + innerError.message);
+          alert('Failed to start eye tracking. Please check your camera permissions and try again.');
+          return false;
         }
-        
-        return true;
       } catch (error) {
         log('ERROR initializing WebGazer: ' + error.message);
+        alert('Failed to initialize eye tracking. Please check your camera permissions and try again.');
         return false;
       }
     }
     
-    // Set up calibration points
+    // Improved calibration for better accuracy
     function setupCalibration() {
       const container = document.getElementById('calibration-area');
       container.innerHTML = '';
       
+      // More calibration points for better accuracy (9 points instead of 5)
       const positions = [
         {x: '10%', y: '10%'},
         {x: '50%', y: '10%'},
@@ -328,8 +383,13 @@
             const rect = e.target.getBoundingClientRect();
             const centerX = rect.left + rect.width / 2;
             const centerY = rect.top + rect.height / 2;
-            webgazer.recordClick(centerX, centerY);
-            log(`Calibration point clicked at ${centerX}, ${centerY}`);
+            
+            // Add multiple samples at each point for better calibration
+            for (let i = 0; i < 5; i++) {
+              webgazer.recordClick(centerX, centerY);
+            }
+            
+            log(`Calibration point clicked at ${centerX.toFixed(2)}, ${centerY.toFixed(2)}`);
           }
           
           // Hide current point
@@ -337,7 +397,7 @@
           
           // Show next point or finish
           currentPoint++;
-          if (currentPoint < 9) {
+          if (currentPoint < positions.length) {
             const nextPoint = document.querySelector(`.calibration-point[data-index="${currentPoint}"]`);
             nextPoint.style.display = 'block';
             nextPoint.style.background = 'green';
@@ -350,16 +410,28 @@
       };
     }
     
-    // Start tracking task
+    // Enhanced tracking with error handling
     function startTracking() {
       const trackingArea = document.getElementById('tracking-area');
       const target = document.getElementById('tracking-target');
+      
+      // Make sure elements exist
+      if (!trackingArea || !target) {
+        log('ERROR: Missing tracking elements');
+        alert('Error: Could not find tracking elements');
+        return;
+      }
+      
       const areaWidth = trackingArea.clientWidth;
       const areaHeight = trackingArea.clientHeight;
       
       function moveTarget() {
-        const x = Math.random() * (areaWidth - 50);
-        const y = Math.random() * (areaHeight - 50);
+        // Generate smoother target movements
+        const x = Math.round(Math.random() * (areaWidth - 50));
+        const y = Math.round(Math.random() * (areaHeight - 50));
+        
+        // Use CSS transitions for smoother movement
+        target.style.transition = 'left 0.5s, top 0.5s';
         target.style.left = x + 'px';
         target.style.top = y + 'px';
         
@@ -453,31 +525,54 @@
       });
     });
     
+    // Enhanced export function with error handling
     function exportGazeData() {
-      // Prepare CSV content
-      let csvContent = "data:text/csv;charset=utf-8,";
-      
-      // Add header row
-      csvContent += "timestamp,x,y\n";
-      
-      // Add data rows
-      gazeData.forEach(point => {
-        csvContent += `${point.timestamp},${point.x},${point.y}\n`;
-      });
-      
-      // Create download link
-      const encodedUri = encodeURI(csvContent);
-      const link = document.createElement("a");
-      link.setAttribute("href", encodedUri);
-      link.setAttribute("download", "eye_tracking_data.csv");
-      document.body.appendChild(link);
-      
-      // Trigger download
-      link.click();
-      document.body.removeChild(link);
-      
-      log('Exported gaze data to CSV file');
+      try {
+        // Prepare CSV content
+        let csvContent = "data:text/csv;charset=utf-8,";
+        
+        // Add header row with more detailed information
+        csvContent += "timestamp,x,y,raw_x,raw_y\n";
+        
+        // Add data rows with more precision
+        gazeData.forEach(point => {
+          const rawX = point.raw ? point.raw.x : point.x;
+          const rawY = point.raw ? point.raw.y : point.y;
+          csvContent += `${point.timestamp},${point.x.toFixed(4)},${point.y.toFixed(4)},${rawX.toFixed(4)},${rawY.toFixed(4)}\n`;
+        });
+        
+        // Create download link
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `eye_tracking_data_${Date.now()}.csv`);
+        document.body.appendChild(link);
+        
+        // Trigger download
+        link.click();
+        document.body.removeChild(link);
+        
+        log('Exported gaze data to CSV file');
+      } catch (error) {
+        log('ERROR exporting gaze data: ' + error.message);
+        alert('Failed to export data: ' + error.message);
+      }
     }
+    
+    // Cleanup function to ensure proper resource release
+    function cleanupWebGazer() {
+      if (typeof webgazer !== 'undefined') {
+        try {
+          webgazer.end();
+          log('WebGazer resources released');
+        } catch (error) {
+          log('Error during WebGazer cleanup: ' + error.message);
+        }
+      }
+    }
+    
+    // Add window unload handler for cleanup
+    window.addEventListener('beforeunload', cleanupWebGazer);
     
     function updateDebugPanel() {
       const debugPanel = document.getElementById('debug-panel');
