@@ -10,6 +10,107 @@ const { Scheduler } = util;
 const { abs, sin, cos, PI: pi, sqrt } = Math;
 const { round } = util;
 
+// Add after the imports but before the experiment info:
+
+// Check for WebGL support and capabilities
+function checkWebGLSupport() {
+  try {
+    // Try to create a WebGL context
+    const canvas = document.createElement('canvas');
+    let gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+    
+    if (!gl) {
+      console.error('WebGL not supported by this browser.');
+      return { supported: false, message: 'WebGL not supported by this browser.' };
+    }
+    
+    // Check for compressed texture support
+    const compressedTexturesSupported = gl.getExtension('WEBGL_compressed_texture_s3tc') 
+      || gl.getExtension('WEBKIT_WEBGL_compressed_texture_s3tc')
+      || gl.getExtension('MOZ_WEBGL_compressed_texture_s3tc');
+    
+    if (!compressedTexturesSupported) {
+      console.warn('WebGL compressed textures not supported. Using fallback rendering.');
+      return { 
+        supported: true, 
+        compressedTextures: false,
+        message: 'WebGL supported, but compressed textures are not available. Using fallback rendering.'
+      };
+    }
+    
+    return { 
+      supported: true,
+      compressedTextures: true,
+      message: 'Full WebGL support including compressed textures.'
+    };
+  } catch (e) {
+    console.error('Error checking WebGL support:', e);
+    return { supported: false, message: 'Error checking WebGL support: ' + e.message };
+  }
+}
+
+// Store WebGL support info globally
+window.webGLInfo = checkWebGLSupport();
+
+// Create a helper function for creating visual components with appropriate fallback options
+function createVisualComponent(componentType, options) {
+  // Apply WebGL-specific fallbacks if needed
+  if (window.webGLInfo && !window.webGLInfo.compressedTextures) {
+    // For text components, use simpler rendering
+    if (componentType === visual.TextStim) {
+      options.wrapWidth = options.wrapWidth || 0.8; // Ensure text wrapping is reasonable
+      options.contrast = 1; // Maximize contrast for better visibility
+    }
+    
+    // For shape components like Rect, use simpler rendering
+    if (componentType === visual.Rect) {
+      options.interpolate = false; // Disable interpolation which might use compressed textures
+    }
+    
+    // For all components, ensure opacity is defined
+    if (options.opacity === undefined) {
+      options.opacity = 1;
+    }
+    
+    console.log(`Creating ${componentType.name} with WebGL fallback options`);
+  }
+  
+  // Create and return the component
+  return new componentType(options);
+}
+
+// Display WebGL support status to user
+if (!window.webGLInfo.supported) {
+  // Create a warning notification if WebGL is not supported at all
+  const notification = document.createElement('div');
+  notification.style.position = 'fixed';
+  notification.style.top = '10px';
+  notification.style.left = '50%';
+  notification.style.transform = 'translateX(-50%)';
+  notification.style.backgroundColor = '#ff9800';
+  notification.style.color = 'white';
+  notification.style.padding = '15px';
+  notification.style.borderRadius = '5px';
+  notification.style.zIndex = '9999';
+  notification.style.maxWidth = '80%';
+  notification.style.textAlign = 'center';
+  notification.innerHTML = `
+    <strong>WebGL Support Issue</strong>
+    <p>${window.webGLInfo.message}</p>
+    <p>The experiment may not display graphics correctly. Try using an updated browser or enabling hardware acceleration.</p>
+  `;
+  
+  // Add the notification when the document is ready
+  if (document.body) {
+    document.body.appendChild(notification);
+  } else {
+    window.addEventListener('DOMContentLoaded', () => {
+      document.body.appendChild(notification);
+    });
+  }
+} else if (!window.webGLInfo.compressedTextures) {
+  console.log('Using fallback rendering mode due to limited WebGL support');
+}
 
 // store info about the experiment session:
 let expName = 'extended_session_experiment';  // from the Builder filename that created this script
@@ -32,13 +133,50 @@ const psychoJS = new PsychoJS({
   topLevelStatus: true
 });
 
-// open window:
-psychoJS.openWindow({
+// Configure options based on WebGL capabilities
+const windowOptions = {
   fullscr: true,
-  color: new util.Color([(- 1), (- 1), (- 1)]),
+  color: new util.Color([(- 1), (- 1), (- 1)]), // black background
   units: 'height',
   waitBlanking: true
-});
+};
+
+// Add WebGL-specific options based on detected capabilities
+if (window.webGLInfo && !window.webGLInfo.compressedTextures) {
+  // If compressed textures aren't supported, use fallback rendering
+  windowOptions.useRetina = false; // Disable retina support which may rely on compressed textures
+  windowOptions.antialias = true; // Enable antialiasing as a quality fallback
+  
+  // Log the adjusted configuration
+  console.log('Adjusting rendering options for limited WebGL support:', windowOptions);
+}
+
+// open window with appropriate options:
+try {
+  psychoJS.openWindow(windowOptions);
+  console.log('Window opened successfully with options:', windowOptions);
+} catch (err) {
+  console.error('Failed to open experiment window:', err);
+  // Create a error notification
+  const errorNotification = document.createElement('div');
+  errorNotification.style.position = 'fixed';
+  errorNotification.style.top = '50%';
+  errorNotification.style.left = '50%';
+  errorNotification.style.transform = 'translate(-50%, -50%)';
+  errorNotification.style.backgroundColor = '#f44336';
+  errorNotification.style.color = 'white';
+  errorNotification.style.padding = '20px';
+  errorNotification.style.borderRadius = '5px';
+  errorNotification.style.zIndex = '10000';
+  errorNotification.style.textAlign = 'center';
+  errorNotification.innerHTML = `
+    <h3 style="margin-top: 0;">Failed to Start Experiment</h3>
+    <p>Error: ${err.message}</p>
+    <p>This may be due to graphics capability issues with your browser.</p>
+    <button onclick="location.reload()" style="background: white; color: #f44336; border: none; padding: 8px 15px; cursor: pointer; border-radius: 3px; margin-top: 10px;">Retry</button>
+  `;
+  document.body.appendChild(errorNotification);
+}
 // schedule the experiment:
 psychoJS.schedule(psychoJS.gui.DlgFromDict({
   dictionary: expInfo,
@@ -250,16 +388,63 @@ async function experimentInit() {
       sumY += y;
     });
     
-    // Construct the coordinate plane
+    // Calculate width and height of calibration area
+    const width = maxX - minX;
+    const height = maxY - minY;
+    
+    // Ensure we have a reasonable calibration area
+    if (width < 0.1 || height < 0.1) {
+      console.warn('Calibration area is too small, using default screen dimensions');
+      
+      // Use full screen dimensions as fallback
+      minX = -1;
+      maxX = 1;
+      minY = -1;
+      maxY = 1;
+    }
+    
+    // Calculate scaling factors to map to full screen
+    const screenAspectRatio = window.screenWidth / window.screenHeight;
+    const calibrationAspectRatio = width / height;
+    
+    // Adjust calibration area to match screen aspect ratio if needed
+    let adjustedMinX = minX;
+    let adjustedMaxX = maxX;
+    let adjustedMinY = minY;
+    let adjustedMaxY = maxY;
+    
+    if (Math.abs(screenAspectRatio - calibrationAspectRatio) > 0.1) {
+      console.log('Adjusting calibration area to match screen aspect ratio');
+      
+      if (screenAspectRatio > calibrationAspectRatio) {
+        // Screen is wider than calibration area, expand horizontally
+        const targetWidth = height * screenAspectRatio;
+        const widthDiff = targetWidth - width;
+        adjustedMinX = minX - (widthDiff / 2);
+        adjustedMaxX = maxX + (widthDiff / 2);
+      } else {
+        // Screen is taller than calibration area, expand vertically
+        const targetHeight = width / screenAspectRatio;
+        const heightDiff = targetHeight - height;
+        adjustedMinY = minY - (heightDiff / 2);
+        adjustedMaxY = maxY + (heightDiff / 2);
+      }
+    }
+    
+    // Construct the coordinate plane with adjusted dimensions
     window.screenCoordinatePlane = {
       initialized: true,
-      topLeft: { x: minX, y: maxY },
-      topRight: { x: maxX, y: maxY },
-      bottomLeft: { x: minX, y: minY },
-      bottomRight: { x: maxX, y: minY },
+      topLeft: { x: adjustedMinX, y: adjustedMaxY },
+      topRight: { x: adjustedMaxX, y: adjustedMaxY },
+      bottomLeft: { x: adjustedMinX, y: adjustedMinY },
+      bottomRight: { x: adjustedMaxX, y: adjustedMinY },
       centerPoint: { x: sumX / window.calibrationPoints.length, y: sumY / window.calibrationPoints.length },
-      width: maxX - minX,
-      height: maxY - minY
+      width: adjustedMaxX - adjustedMinX,
+      height: adjustedMaxY - adjustedMinY,
+      originalWidth: width,
+      originalHeight: height,
+      screenWidth: window.screenWidth,
+      screenHeight: window.screenHeight
     };
     
     console.log('Coordinate plane constructed:', window.screenCoordinatePlane);
@@ -285,23 +470,25 @@ async function experimentInit() {
     }
   };
   
-  webcamWarning = new visual.TextStim({
+  // Use our createVisualComponent helper for WebGL compatibility
+  webcamWarning = createVisualComponent(visual.TextStim, {
     win: psychoJS.window,
     name: 'webcamWarning',
-    text: 'This experiment uses eye tracking. \n\nYou should see your web-browser request access to your webcam. You might need to click on this text to make that happen. Please permit access, and wait a little while. Your webcam video should appear in the top-left of the screen.',
+    text: 'This experiment uses eye tracking. \n\nYou should see your web-browser request access to your webcam. Please permit access, and wait a little while. Your webcam video should appear in the top-left of the screen.',
     font: 'Arial',
     units: undefined, 
-    pos: [0, 0], height: 0.05,  wrapWidth: undefined, ori: 0.0,
-    color: new util.Color('white'),  opacity: undefined,
+    pos: [0, 0], height: 0.05, wrapWidth: undefined, ori: 0.0,
+    color: new util.Color('white'), opacity: undefined,
     depth: -1.0 
   });
   
   // Initialize components for Routine "inst1"
   inst1Clock = new util.Clock();
-  instruction1Txt = new visual.TextStim({
+  
+  instruction1Txt = createVisualComponent(visual.TextStim, {
     win: psychoJS.window,
     name: 'instruction1Txt',
-    text: 'Webgazer initialized. \nPress space to move on',
+    text: 'WebGazer initialized.\nPress space to continue',
     font: 'Arial',
     units: undefined, 
     pos: [0, 0], height: 0.05,  wrapWidth: undefined, ori: 0.0,
@@ -313,10 +500,11 @@ async function experimentInit() {
   
   // Initialize components for Routine "calibrationIntro"
   calibrationIntroClock = new util.Clock();
-  calibrationTxt = new visual.TextStim({
+  
+  calibrationTxt = createVisualComponent(visual.TextStim, {
     win: psychoJS.window,
     name: 'calibrationTxt',
-    text: "OK great! we are almost ready to get started. \n\nFirst we need to calibrate the eye tracker. Please try to keep your head still. If you move your head too far away, you'r webcam will appear in the top left corner. If this happens, please move back into view. \n\nWhite squares will appear at different locations on the screen. Please click each square with your mouse.\n\nClick anywhere with the mouse to continue...",
+    text: "OK great! we are almost ready to get started. \n\nFirst we need to calibrate the eye tracker. Please try to keep your head still. If you move your head too far away, your webcam will appear in the top left corner. If this happens, please move back into view. \n\nWhite squares will appear at different locations on the screen. Please click each square with your mouse.\n\nClick anywhere with the mouse to continue...",
     font: 'Arial',
     units: undefined, 
     pos: [0, 0], height: 0.05,  wrapWidth: undefined, ori: 0.0,
@@ -330,7 +518,7 @@ async function experimentInit() {
   calibrationMouse.mouseClock = new util.Clock();
   // Initialize components for Routine "calibration"
   calibrationClock = new util.Clock();
-  calibration_square = new visual.Rect ({
+  calibration_square = createVisualComponent(visual.Rect, {
     win: psychoJS.window, name: 'calibration_square', 
     width: [0.02, 0.02][0], height: [0.02, 0.02][1],
     ori: 0.0, pos: [0, 0],
@@ -351,13 +539,45 @@ async function experimentInit() {
     interpolate: true
   });
   
+  // Replace with our helper function:
+  
+  // For WebGL compatibility, extend our helper function to handle Polygon objects
+  if (window.webGLInfo && !window.webGLInfo.compressedTextures) {
+    console.log('Adding Polygon handling to createVisualComponent for WebGL compatibility');
+    const originalCreateVisualComponent = createVisualComponent;
+    createVisualComponent = function(componentType, options) {
+      // Add special handling for Polygon
+      if (componentType === visual.Polygon) {
+        options.interpolate = false; // Disable interpolation which might use compressed textures
+        // Use simpler shape with fewer edges if WebGL has limited capabilities
+        if (options.edges > 20) {
+          console.log(`Reducing polygon complexity from ${options.edges} edges to 20 edges`);
+          options.edges = 20;
+        }
+      }
+      return originalCreateVisualComponent(componentType, options);
+    };
+  }
+  
+  // Use the enhanced helper function for the calibration dot
+  calibrationDot = createVisualComponent(visual.Polygon, {
+    win: psychoJS.window,
+    name: 'calibrationDot',
+    edges: 32, size: [0.03, 0.03],
+    ori: 0, pos: [0, 0],
+    lineWidth: 1, lineColor: new util.Color([1, 1, 1]),
+    fillColor: new util.Color([1, 0, 0]),
+    opacity: 1, depth: 0.0,
+    interpolate: true
+  });
+  
   calibrationClick = new core.Mouse({
     win: psychoJS.window,
   });
   calibrationClick.mouseClock = new util.Clock();
   // Initialize components for Routine "trackingTrial"
   trackingTrialClock = new util.Clock();
-  tracking_square = new visual.Rect ({
+  tracking_square = createVisualComponent(visual.Rect, {
     win: psychoJS.window, name: 'tracking_square', 
     width: [0.02, 0.02][0], height: [0.02, 0.02][1],
     ori: 0.0, pos: [0, 0],
@@ -366,10 +586,10 @@ async function experimentInit() {
     opacity: undefined, depth: 0, interpolate: true,
   });
   
-  trackingTxt = new visual.TextStim({
+  trackingTxt = createVisualComponent(visual.TextStim, {
     win: psychoJS.window,
     name: 'trackingTxt',
-    text: 'Great! we are now tracking your eye movements! look around the screen to see how it works! \n\nPlease remember is important for you to keep your head still during the experiment. \n\nPress space to start',
+    text: 'Great! We are now tracking your eye movements! Look around the screen to see how it works! \n\nPlease remember it is important for you to keep your head still during the experiment. \n\nPress space to start',
     font: 'Arial',
     units: undefined, 
     pos: [0, 0], height: 0.05,  wrapWidth: undefined, ori: 0.0,
@@ -985,40 +1205,44 @@ function calibrationRoutineEachFrame() {
     t = calibrationClock.getTime();
     frameN = frameN + 1;// number of completed frames (so 0 is the first frame)
     // update/draw components on each frame
-    // returns type error - checking fix 
-    
-    // Hide webcam thumbnail if eyes are in validation box
-    if (window.webgazer && window.webgazer.checkEyesInValidationBox) {
-      // Handle eye position validation
-      const eyesInBox = window.webgazer.checkEyesInValidationBox();
-      
-      if (eyesInBox === true) {
-        // If eyes are in validation box
-        if (
-          document.getElementById('webgazerFaceFeedbackBox').style.display != 'none' &&
-          (new Date).getTime() > window.eyesExitedTimestamp + window.eyesReturnedDelay
-        ) {   
-          // Hide webcam elements after delay
-          if (document.getElementById('webgazerFaceFeedbackBox')) {
-            document.getElementById('webgazerFaceFeedbackBox').style.display = 'none';
-          }
-          if (document.getElementById('webgazerVideoFeed')) {
-            document.getElementById('webgazerVideoFeed').style.display = 'none';
-          }
-          
-          // Record when we hid the webcam
-          psychoJS.experiment.addData('webcamHidden', Date.now());
-        }
+    try {
+      if (window.webgazer) {
+        window.webgazer.checkEyesInValidationBox();
       } else {
-        // Eyes outside of validation box; show thumbnail
-        window.eyesExitedTimestamp = (new Date).getTime();
-        document.getElementById('webgazerFaceFeedbackBox').style.display = 'block';
-        document.getElementById('webgazerVideoFeed').style.display = 'block';
+        console.error('WebGazer is not available');
       }
-    } else {
-      console.error('WebGazer is not available');
+    } catch (err) {
+      console.error('Error in webgazer.checkEyesInValidationBox:', err);
     }
-    
+
+    // Add specific check for WebGL compressed textures issue
+    if (window.webGLInfo && !window.webGLInfo.compressedTextures) {
+      try {
+        // If an element is failing due to WebGL compressed textures, handle it gracefully
+        if (calibrationDot && calibrationDot.status === PsychoJS.Status.STARTED) {
+          // Check if calibrationDot is having issues
+          if (!calibrationDot._pixi || !calibrationDot._pixi.visible) {
+            console.warn('WebGL issue detected with calibrationDot. Using fallback rendering...');
+            // Try to recreate with simpler rendering
+            calibrationDot.setAutoDraw(false);
+            calibrationDot = createVisualComponent(visual.Polygon, {
+              win: psychoJS.window,
+              name: 'calibrationDot',
+              edges: 16, // Even fewer edges
+              size: [0.03, 0.03],
+              ori: 0, pos: [calibration_x, calibration_y],
+              lineWidth: 1, lineColor: new util.Color([1, 1, 1]),
+              fillColor: new util.Color([1, 0, 0]),
+              opacity: 1, depth: 0.0,
+              interpolate: false
+            });
+            calibrationDot.setAutoDraw(true);
+          }
+        }
+      } catch (webglErr) {
+        console.error('Error handling WebGL fallback:', webglErr);
+      }
+    }
     
     if (
       document.getElementById('webgazerFaceFeedbackBox').style.display != 'none' &&
@@ -1027,7 +1251,6 @@ function calibrationRoutineEachFrame() {
       document.getElementById('webgazerFaceFeedbackBox').style.display = 'none';
       document.getElementById('webgazerVideoFeed').style.display = 'none';
     }
-    
     
     // *calibration_square* updates
     if (t >= 0.5 && calibration_square.status === PsychoJS.Status.NOT_STARTED) {
@@ -1060,40 +1283,47 @@ function calibrationRoutineEachFrame() {
     if (calibrationDot.status === PsychoJS.Status.STARTED && t >= frameRemains) {
       calibrationDot.setAutoDraw(false);
     }
-    
     // *calibrationClick* updates
     if (t >= 0.5 && calibrationClick.status === PsychoJS.Status.NOT_STARTED) {
       // keep track of start time/frame for later
       calibrationClick.tStart = t;  // (not accounting for frame time here)
       calibrationClick.frameNStart = frameN;  // exact frame index
       
-      calibrationClick.status = PsychoJS.Status.STARTED;
-      calibrationClick.mouseClock.reset();
-      prevButtonState = calibrationClick.getPressed();  // if button is down already this ISN'T a new click
-      }
-    frameRemains = 0.5 + 3 - psychoJS.window.monitorFramePeriod * 0.75;  // most of one frame period left
+      // keyboard checking is just starting
+      psychoJS.window.callOnFlip(function() { calibrationClick.clock.reset(); });  // t=0 on next screen flip
+      psychoJS.window.callOnFlip(function() { calibrationClick.start(); }); // start on screen flip
+      psychoJS.window.callOnFlip(function() { calibrationClick.clearEvents(); });
+    }
     if (calibrationClick.status === PsychoJS.Status.STARTED && t >= frameRemains) {
       calibrationClick.status = PsychoJS.Status.FINISHED;
     }
-    if (calibrationClick.status === PsychoJS.Status.STARTED) {  // only update if started and not finished!
-      _mouseButtons = calibrationClick.getPressed();
-      if (!_mouseButtons.every( (e,i,) => (e == prevButtonState[i]) )) { // button state changed?
-        prevButtonState = _mouseButtons;
-        if (_mouseButtons.reduce( (e, acc) => (e+acc) ) > 0) { // state changed to a new click
-          // check if the mouse was inside our 'clickable' objects
-          gotValidClick = false;
-          for (const obj of [calibration_square, calibrationDot]) {
-            if (obj.contains(calibrationClick)) {
-              gotValidClick = true;
-              calibrationClick.clicked_name.push(obj.name)
-            }
-          }
-          // abort routine on response
-          continueRoutine = false;
+    if (calibrationClick.status === PsychoJS.Status.STARTED) {
+      if (calibrationClick.getPressed()[0] === 1) {
+        callib_color = 'white';
+        const distance = Math.sqrt(
+          Math.pow((calibrationClick.getPos()[0] - calibration_x), 2) + 
+          Math.pow((calibrationClick.getPos()[1] - calibration_y), 2)
+        );
+        if (distance < 1) {
+          //gotValidClick = true;
+          
+          // Store this calibration point
+          window.calibrationPoints.push({
+            expected: [calibration_x, calibration_y],
+            clicked: [calibrationClick.getPos()[0], calibrationClick.getPos()[1]]
+          });
+          
+          // Save values to experiment data
+          psychoJS.experiment.addData('calibration_x_expected', calibration_x);
+          psychoJS.experiment.addData('calibration_y_expected', calibration_y);
+          psychoJS.experiment.addData('calibration_x_clicked', calibrationClick.getPos()[0]);
+          psychoJS.experiment.addData('calibration_y_clicked', calibrationClick.getPos()[1]);
         }
+        
+        calibrationClick.status = PsychoJS.Status.FINISHED;
+        continueRoutine = false;
       }
     }
-    
     // check for quit (typically the Esc key)
     if (psychoJS.experiment.experimentEnded || psychoJS.eventManager.getKeys({keyList:['escape']}).length > 0) {
       return quitPsychoJS('The [Escape] key was pressed. Goodbye!', false);
@@ -1259,7 +1489,6 @@ function trackingTrialRoutineEachFrame() {
     // Set tracking square position based on latest gaze position
     // Calculate average gaze position
     if (window.xGazes && window.yGazes && window.xGazes.length > 0 && window.yGazes.length > 0) {
-      // Convert raw gaze data to coordinate plane
       // Get average of recent gaze positions
       var sumX = 0;
       var sumY = 0;
@@ -1280,15 +1509,26 @@ function trackingTrialRoutineEachFrame() {
         
         // Map raw coordinates to experiment coordinate system if coordinate plane is initialized
         if (window.screenCoordinatePlane.initialized) {
-          // Normalize coordinates to 0-1 range based on screen dimensions
-          var normalizedX = (avgX - window.screenCoordinatePlane.topLeft.x) / window.screenCoordinatePlane.width;
-          var normalizedY = (avgY - window.screenCoordinatePlane.topLeft.y) / window.screenCoordinatePlane.height;
+          // Get screen dimensions from user input or detection
+          const screenWidth = window.screenWidth || window.screen.width;
+          const screenHeight = window.screenHeight || window.screen.height;
           
-          // Map to PsychoJS coordinate system (-1 to 1)
-          var mappedX = (normalizedX * 2) - 1;
-          var mappedY = -((normalizedY * 2) - 1); // Y is flipped in browser coordinates
+          // Map raw screen coordinates (pixels) to normalized coordinates (0-1)
+          const normalizedX = avgX / screenWidth;
+          const normalizedY = avgY / screenHeight;
           
-          // Update tracking square position with the mapped coordinates
+          // Map normalized coordinates to PsychoJS coordinate system (-1 to 1)
+          // using the calibrated coordinate plane
+          const planeWidth = window.screenCoordinatePlane.width;
+          const planeHeight = window.screenCoordinatePlane.height;
+          const planeLeft = window.screenCoordinatePlane.topLeft.x;
+          const planeTop = window.screenCoordinatePlane.topLeft.y;
+          
+          // Calculate mapped coordinates
+          const mappedX = planeLeft + (normalizedX * planeWidth);
+          const mappedY = planeTop - (normalizedY * planeHeight);
+          
+          // Apply the mapped coordinates to the tracking square
           tracking_square.setPos([mappedX, mappedY]);
           
           // Record mapping data periodically (every 30 frames) to avoid excessive data
@@ -1297,12 +1537,25 @@ function trackingTrialRoutineEachFrame() {
               raw: [avgX, avgY],
               normalized: [normalizedX, normalizedY],
               mapped: [mappedX, mappedY],
-              frameN: frameN
+              frameN: frameN,
+              screenDimensions: [screenWidth, screenHeight]
             }));
           }
         } else {
           // Fallback if coordinate plane not initialized
-          tracking_square.setPos([avgX, avgY]);
+          // Convert raw pixel coordinates to PsychoJS coordinates (-1 to 1)
+          const screenWidth = window.screen.width;
+          const screenHeight = window.screen.height;
+          
+          // Normalize to -1 to 1 range
+          const mappedX = ((avgX / screenWidth) * 2) - 1;
+          const mappedY = -((avgY / screenHeight) * 2) + 1; // Y is flipped in browser coordinates
+          
+          tracking_square.setPos([mappedX, mappedY]);
+          
+          if (frameN % 30 === 0) {
+            console.log('Using fallback coordinate mapping:', [mappedX, mappedY]);
+          }
         }
       }
     }
@@ -1519,13 +1772,39 @@ function importConditions(currentLoop) {
     }
     
     if (typeof currentTrial.Calibrate_Y !== 'undefined') {
-      window.calibration_y = currentTrial.Calibrate_Y;
+      window.calibrationTxt = currentTrial.Calibrate_Y;
     }
     
     return Scheduler.Event.NEXT;
   };
 }
 
+// Replace with:
+
+function importConditions(currentLoop) {
+  return async function () {
+    const currentTrial = currentLoop.getCurrentTrial();
+    psychoJS.importAttributes(currentTrial);
+    
+    // Map the CSV column names to the variable names used in the code
+    if (typeof currentTrial.Calibrate_X !== 'undefined') {
+      window.calibration_x = currentTrial.Calibrate_X;
+    }
+    
+    if (typeof currentTrial.Calibrate_Y !== 'undefined') {
+      // Bug fix: properly set the Y coordinate rather than overwriting calibrationTxt
+      window.calibration_y = currentTrial.Calibrate_Y;
+    }
+    
+    // For troubleshooting: log the values to make sure they're correctly set
+    console.log('Calibration coordinates set:', {
+      x: window.calibration_x,
+      y: window.calibration_y
+    });
+    
+    return Scheduler.Event.NEXT;
+  };
+}
 
 // Global array to store all gaze data
 window.allGazeData = [];
@@ -1545,6 +1824,7 @@ function startGazeLogging() {
       window.gazeDebugWindow.close();
     }
     
+
     // Open new debug window
     window.gazeDebugWindow = window.open('', 'WebGazer Debug', windowFeatures);
     
@@ -1572,6 +1852,7 @@ function startGazeLogging() {
               padding: 10px; 
               background: #fff; 
               border-radius: 5px;
+              box-shadow: 0 2px 5px rgba(0,0,0,0.1);
             }
             #log { 
               height: 150px; 
@@ -1650,23 +1931,54 @@ function startGazeLogging() {
               margin-top: 0;
               color: #555;
             }
+            .grid-line {
+              position: absolute;
+              background: rgba(0,0,0,0.1);
+              z-index: 1;
+            }
+            .grid-line-h {
+              width: 100%;
+              height: 1px;
+            }
+            .grid-line-v {
+              height: 100%;
+              width: 1px;
+            }
+            .coordinate-label {
+              position: absolute;
+              font-size: 10px;
+              color: #666;
+              z-index: 1;
+            }
           </style>
         </head>
         <body>
           <h2>WebGazer Gaze Data Visualization</h2>
           
           <div class="section">
+            <h3>Configuration</h3>
+            <div id="config">
+              Screen Resolution: <span id="screenResolution">${window.screenWidth || window.screen.width}x${window.screenHeight || window.screen.height}</span><br>
+              Webcam: <span id="webcamInfo">${expInfo.webcam || 'Default'}</span><br>
+              Calibration Status: <span id="calibrationStatus">In Progress</span>
+            </div>
+          </div>
+          
+          <div class="section">
             <h3>Statistics</h3>
             <div id="stats">
               Total points: <span id="pointCount">0</span><br>
               Last coordinates: <span id="lastCoords">None</span><br>
-              Points per second: <span id="pointsPerSecond">0</span>
+              Points per second: <span id="pointsPerSecond">0</span><br>
+              Mapping quality: <span id="mappingQuality">Unknown</span>
             </div>
           </div>
           
           <div class="section">
             <h3>Real-time Gaze Visualization</h3>
-            <div id="visualization"></div>
+            <div id="visualization">
+              <!-- Grid lines will be added by JavaScript -->
+            </div>
           </div>
           
           <div class="section">
@@ -1678,6 +1990,7 @@ function startGazeLogging() {
             <button id="exportBtn">Export Data (CSV)</button>
             <button id="clearBtn">Clear Visualizations</button>
             <button id="toggleHeatmapBtn">Toggle Heatmap</button>
+            <button id="toggleGridBtn">Toggle Grid</button>
           </div>
           
           <div class="section">
@@ -1690,12 +2003,83 @@ function startGazeLogging() {
             let startTime = Date.now();
             let pointsCollected = 0;
             let showHeatmap = true;
+            let showGrid = true;
+            
+            // Create grid lines for visualization
+            function createGrid() {
+              const vizElem = document.getElementById('visualization');
+              if (!vizElem) return;
+              
+              // Clear existing grid
+              const existingGridLines = vizElem.querySelectorAll('.grid-line, .coordinate-label');
+              existingGridLines.forEach(line => line.remove());
+              
+              if (!showGrid) return;
+              
+              const width = vizElem.offsetWidth;
+              const height = vizElem.offsetHeight;
+              
+              // Create horizontal grid lines (5 lines)
+              for (let i = 0; i <= 4; i++) {
+                const y = (i / 4) * height;
+                const line = document.createElement('div');
+                line.className = 'grid-line grid-line-h';
+                line.style.top = y + 'px';
+                vizElem.appendChild(line);
+                
+                // Add coordinate label
+                const label = document.createElement('div');
+                label.className = 'coordinate-label';
+                label.textContent = (1 - i / 2).toFixed(1);
+                label.style.top = (y - 8) + 'px';
+                label.style.left = '2px';
+                vizElem.appendChild(label);
+              }
+              
+              // Create vertical grid lines (5 lines)
+              for (let i = 0; i <= 4; i++) {
+                const x = (i / 4) * width;
+                const line = document.createElement('div');
+                line.className = 'grid-line grid-line-v';
+                line.style.left = x + 'px';
+                vizElem.appendChild(line);
+                
+                // Add coordinate label
+                const label = document.createElement('div');
+                label.className = 'coordinate-label';
+                label.textContent = (i / 2 - 1).toFixed(1);
+                label.style.left = (x - 8) + 'px';
+                label.style.top = (height - 15) + 'px';
+                vizElem.appendChild(label);
+              }
+            }
+            
+            // Create grid on load
+            window.addEventListener('load', createGrid);
+            window.addEventListener('resize', createGrid);
             
             // Update points per second every second
             setInterval(function() {
               const elapsedSeconds = (Date.now() - startTime) / 1000;
               const pps = (pointsCollected / elapsedSeconds).toFixed(1);
               document.getElementById('pointsPerSecond').textContent = pps;
+              
+              // Update calibration status
+              if (window.opener && window.opener.screenCoordinatePlane) {
+                const plane = window.opener.screenCoordinatePlane;
+                if (plane.initialized) {
+                  document.getElementById('calibrationStatus').textContent = 'Calibrated';
+                  document.getElementById('calibrationStatus').style.color = '#4CAF50';
+                  
+                  // Update mapping quality based on calibration points
+                  if (window.opener.trackingAccuracy) {
+                    const quality = window.opener.trackingAccuracy;
+                    const avgError = ((quality.x + quality.y) / 2).toFixed(3);
+                    document.getElementById('mappingQuality').textContent = 
+                      \`Average Error: \${avgError} (x: \${quality.x.toFixed(3)}, y: \${quality.y.toFixed(3)})\`;
+                  }
+                }
+              }
             }, 1000);
             
             // Setup event handlers
@@ -1721,12 +2105,19 @@ function startGazeLogging() {
               document.getElementById('lastCoords').textContent = "None";
               pointsCollected = 0;
               startTime = Date.now();
+              createGrid();
             });
             
             document.getElementById('toggleHeatmapBtn').addEventListener('click', function() {
               showHeatmap = !showHeatmap;
               document.getElementById('heatmap').style.display = showHeatmap ? 'block' : 'none';
               this.textContent = showHeatmap ? 'Hide Heatmap' : 'Show Heatmap';
+            });
+            
+            document.getElementById('toggleGridBtn').addEventListener('click', function() {
+              showGrid = !showGrid;
+              this.textContent = showGrid ? 'Hide Grid' : 'Show Grid';
+              createGrid();
             });
           </script>
         </body>
@@ -1741,6 +2132,41 @@ function startGazeLogging() {
       console.log('Gaze debug window created successfully');
     } else {
       console.warn('Failed to create gaze debug window - popup might be blocked');
+      
+      // Create a notification element to alert the user
+      const notification = document.createElement('div');
+      notification.style.position = 'fixed';
+      notification.style.top = '10px';
+      notification.style.left = '50%';
+      notification.style.transform = 'translateX(-50%)';
+      notification.style.backgroundColor = '#f44336';
+      notification.style.color = 'white';
+      notification.style.padding = '15px';
+      notification.style.borderRadius = '5px';
+      notification.style.zIndex = '9999';
+      notification.style.boxShadow = '0 2px 10px rgba(0,0,0,0.2)';
+      notification.style.maxWidth = '80%';
+      notification.style.textAlign = 'center';
+      notification.innerHTML = `
+        <strong>Popup Blocked!</strong> 
+        <p>The gaze visualization window was blocked by your browser.</p>
+        <p>Please allow popups for this site and <button id="retryBtn" style="background: white; color: #f44336; border: none; padding: 5px 10px; cursor: pointer; border-radius: 3px; font-weight: bold;">Retry</button></p>
+      `;
+      
+      document.body.appendChild(notification);
+      
+      // Add event listener to retry button
+      document.getElementById('retryBtn').addEventListener('click', function() {
+        document.body.removeChild(notification);
+        startGazeLogging();
+      });
+      
+      // Auto-remove after 10 seconds
+      setTimeout(() => {
+        if (document.body.contains(notification)) {
+          document.body.removeChild(notification);
+        }
+      }, 10000);
     }
     
     // Set up the gaze listener to collect data
@@ -1800,9 +2226,9 @@ function startGazeLogging() {
               const point = window.gazeDebugWindow.document.createElement('div');
               point.className = 'point';
               
-              // Get screen dimensions
-              const screenWidth = window.screen.width;
-              const screenHeight = window.screen.height;
+              // Get screen dimensions from user input or detection
+              const screenWidth = window.screenWidth || window.screen.width;
+              const screenHeight = window.screenHeight || window.screen.height;
               
               // Normalize to visualization area
               const vizWidth = vizElem.offsetWidth;
@@ -1840,7 +2266,55 @@ function startGazeLogging() {
       } else if (window.allGazeData.length % 100 === 0) {
         // If debug window was closed, try to reopen it
         console.log('Debug window closed or not available. Attempting to reopen...');
-        startGazeLogging();
+        
+        // Create a new debug window
+        const debugWidth = 600;
+        const debugHeight = 700;
+        const windowFeatures = `width=${debugWidth},height=${debugHeight},resizable=yes,scrollbars=yes,status=yes,location=no`;
+        
+        // Open new debug window
+        window.gazeDebugWindow = window.open('', 'WebGazer Debug', windowFeatures);
+        
+        if (window.gazeDebugWindow) {
+          // Initialize the debug window with HTML structure (reuse the same HTML)
+          window.gazeDebugWindow.document.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <title>WebGazer Gaze Data Visualization</title>
+              <style>
+                body { 
+                  font-family: Arial, sans-serif; 
+                  margin: 0; 
+                  padding: 10px; 
+                  background-color: #f0f0f0;
+                }
+                /* Rest of the styles... */
+                h2 { margin-top: 0; color: #333; text-align: center; }
+                #stats { margin-bottom: 15px; padding: 10px; background: #fff; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+                #log { height: 150px; overflow: auto; border: 1px solid #ccc; padding: 10px; font-family: monospace; font-size: 12px; background: #fff; border-radius: 5px; margin-bottom: 15px; }
+                #visualization, #heatmap { border: 1px solid #ccc; background: #fff; position: relative; height: 200px; margin: 15px 0; border-radius: 5px; overflow: hidden; }
+                .point { position: absolute; width: 6px; height: 6px; background: rgba(255,0,0,0.7); border-radius: 50%; margin-left: -3px; margin-top: -3px; z-index: 2; }
+                .heatpoint { position: absolute; width: 20px; height: 20px; background: radial-gradient(circle, rgba(255,0,0,0.8) 0%, rgba(255,0,0,0) 70%); border-radius: 50%; margin-left: -10px; margin-top: -10px; z-index: 1; }
+              </style>
+            </head>
+            <body>
+              <h2>WebGazer Gaze Data Visualization (Reopened)</h2>
+              <div id="stats">
+                Total points: <span id="pointCount">0</span><br>
+                Last coordinates: <span id="lastCoords">None</span><br>
+              </div>
+              <div id="visualization"></div>
+              <div id="heatmap"></div>
+              <div id="log"></div>
+            </body>
+            </html>
+          `);
+          
+          window.gazeDebugWindow.document.close();
+          window.gazeDebugWindow.focus();
+          console.log('Gaze debug window reopened successfully');
+        }
       }
     });
     
@@ -2025,18 +2499,34 @@ async function initializeWebGazer() {
         }
       }
       
-      // Set up WebGazer
-      await window.webgazer.setRegression('ridge')
-        .setTracker('TFFacemesh')
-        .setGazeListener(function(data, timestamp) {
-          // This is just a placeholder - our detailed listener will be set up later
-          if (data == null) return;
-          
-          // Store eye gaze position
-          window.currentGazeX = data.x;
-          window.currentGazeY = data.y;
-        })
-        .begin();
+      // Set up WebGazer with more robust error handling
+      try {
+        await window.webgazer.setRegression('ridge')
+          .setTracker('TFFacemesh')
+          .setGazeListener(function(data, timestamp) {
+            // This is just a placeholder - our detailed listener will be set up later
+            if (data == null) return;
+            
+            // Store eye gaze position
+            window.currentGazeX = data.x;
+            window.currentGazeY = data.y;
+          })
+          .begin();
+        
+        console.log('WebGazer core initialized successfully');
+      } catch (initErr) {
+        console.error('Error during WebGazer core initialization:', initErr);
+        // Try with fallback settings
+        try {
+          console.log('Trying fallback initialization...');
+          await window.webgazer.setRegression('weightedRidge')
+            .setTracker('clmtrackr')
+            .begin();
+          console.log('WebGazer initialized with fallback settings');
+        } catch (fallbackErr) {
+          throw new Error(`Failed to initialize WebGazer with fallback settings: ${fallbackErr.message}`);
+        }
+      }
       
       // Ensure webcam elements are visible
       if (document.getElementById('webgazerFaceFeedbackBox')) {
@@ -2046,18 +2536,97 @@ async function initializeWebGazer() {
         document.getElementById('webgazerVideoFeed').style.display = 'block';
       }
       
-      // Start the robust fallback data logging system
-      startGazeLogging();
+      // Start the robust fallback data logging system with retry
+      let loggingSuccess = false;
+      let retryCount = 0;
+      const maxRetries = 3;
       
-      console.log('WebGazer initialized successfully with debug window');
+      while (!loggingSuccess && retryCount < maxRetries) {
+        try {
+          console.log(`Starting gaze logging (attempt ${retryCount + 1})...`);
+          startGazeLogging();
+          loggingSuccess = true;
+          console.log('Gaze logging started successfully');
+        } catch (loggingErr) {
+          console.error(`Error starting gaze logging (attempt ${retryCount + 1}):`, loggingErr);
+          retryCount++;
+          // Wait a bit before retrying
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+      
+      if (!loggingSuccess) {
+        console.warn('Failed to start gaze logging after multiple attempts');
+      }
+      
+      console.log('WebGazer initialization complete');
       return true;
     } catch (err) {
       console.error('Failed to initialize WebGazer:', err);
-      alert('Eye tracking failed to initialize: ' + err.message);
+      
+      // Create a more informative error message for the user
+      const errorNotification = document.createElement('div');
+      errorNotification.style.position = 'fixed';
+      errorNotification.style.top = '50%';
+      errorNotification.style.left = '50%';
+      errorNotification.style.transform = 'translate(-50%, -50%)';
+      errorNotification.style.backgroundColor = '#f44336';
+      errorNotification.style.color = 'white';
+      errorNotification.style.padding = '20px';
+      errorNotification.style.borderRadius = '5px';
+      errorNotification.style.zIndex = '10000';
+      errorNotification.style.boxShadow = '0 4px 20px rgba(0,0,0,0.3)';
+      errorNotification.style.maxWidth = '80%';
+      errorNotification.style.textAlign = 'center';
+      errorNotification.innerHTML = `
+        <h3 style="margin-top: 0;">Eye Tracking Initialization Failed</h3>
+        <p>${err.message}</p>
+        <p>Possible causes:</p>
+        <ul style="text-align: left;">
+          <li>Camera access was denied</li>
+          <li>No camera detected</li>
+          <li>Browser compatibility issue</li>
+        </ul>
+        <button id="retryWebGazerBtn" style="background: white; color: #f44336; border: none; padding: 8px 15px; cursor: pointer; border-radius: 3px; font-weight: bold; margin-top: 10px;">Retry</button>
+      `;
+      
+      document.body.appendChild(errorNotification);
+      
+      // Add event listener to retry button
+      document.getElementById('retryWebGazerBtn').addEventListener('click', function() {
+        document.body.removeChild(errorNotification);
+        initializeWebGazer();
+      });
+      
       return false;
     }
   } else {
     console.error('WebGazer not found. Make sure webgazer.js is loaded correctly.');
+    
+    // Create a notification for missing WebGazer
+    const missingNotification = document.createElement('div');
+    missingNotification.style.position = 'fixed';
+    missingNotification.style.top = '50%';
+    missingNotification.style.left = '50%';
+    missingNotification.style.transform = 'translate(-50%, -50%)';
+    missingNotification.style.backgroundColor = '#ff9800';
+    missingNotification.style.color = 'white';
+    missingNotification.style.padding = '20px';
+    missingNotification.style.borderRadius = '5px';
+    missingNotification.style.zIndex = '10000';
+    missingNotification.style.boxShadow = '0 4px 20px rgba(0,0,0,0.3)';
+    missingNotification.style.maxWidth = '80%';
+    missingNotification.style.textAlign = 'center';
+    missingNotification.innerHTML = `
+      <h3 style="margin-top: 0;">WebGazer Not Found</h3>
+      <p>The eye tracking library (WebGazer) could not be loaded.</p>
+      <p>Please check your internet connection and refresh the page.</p>
+      <button onclick="location.reload()" style="background: white; color: #ff9800; border: none; padding: 8px 15px; cursor: pointer; border-radius: 3px; font-weight: bold; margin-top: 10px;">Refresh Page</button>
+    `;
+    
+    document.body.appendChild(missingNotification);
+    
     return false;
   }
 }
+
