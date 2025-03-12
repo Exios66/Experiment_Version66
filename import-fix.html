@@ -246,16 +246,122 @@
             };
             return this;
           },
-          Window: function() { return this; }
+          Window: function() { return this; },
+          Keyboard: function() { 
+            this.start = function() {};
+            this.stop = function() {};
+            this.clearEvents = function() {};
+            this.getEvents = function() { return []; };
+            this.getKeys = function() { return []; };
+            return this; 
+          },
+          Mouse: function() {
+            this.start = function() {};
+            this.stop = function() {};
+            this.clearEvents = function() {};
+            this.getEvents = function() { return []; };
+            this.getPos = function() { return [0, 0]; };
+            this.mouseClock = new window.psychoJS.util.Clock();
+            return this;
+          }
         },
         data: {
           ExperimentHandler: function() { return this; },
           TrialHandler: function() { return this; }
         },
-        util: {},
+        util: {
+          Clock: function() {
+            this.getTime = function() { return Date.now() / 1000; };
+            return this;
+          },
+          Color: function() { return this; },
+          // Add Scheduler implementation
+          Scheduler: function(psychoJS) {
+            this._psychoJS = psychoJS;
+            this._taskList = [];
+            this._currentTask = 0;
+            this._stopAtNextUpdate = false;
+            
+            this.add = function(task) {
+              addDebugMessage('Scheduler.add: Adding task to scheduler');
+              this._taskList.push(task);
+              return this;
+            };
+            
+            this.start = function() {
+              addDebugMessage('Scheduler.start: Starting scheduler with ' + this._taskList.length + ' tasks');
+              this._currentTask = 0;
+              this._stopAtNextUpdate = false;
+              
+              // Start the scheduler by executing the first task
+              setTimeout(() => this._runNextTask(), 10);
+              return this;
+            };
+            
+            this._runNextTask = function() {
+              if (this._stopAtNextUpdate || this._currentTask >= this._taskList.length) {
+                addDebugMessage('Scheduler: All tasks completed or scheduler stopped');
+                return;
+              }
+              
+              try {
+                const task = this._taskList[this._currentTask];
+                addDebugMessage('Scheduler: Running task ' + (this._currentTask + 1) + ' of ' + this._taskList.length);
+                
+                const taskResult = task();
+                this._currentTask++;
+                
+                // Check if we should continue
+                if (!this._stopAtNextUpdate && this._currentTask < this._taskList.length) {
+                  setTimeout(() => this._runNextTask(), 10);
+                }
+              } catch (error) {
+                addDebugMessage('Error in scheduler task: ' + error);
+                showError('Error in experiment task: ' + error);
+              }
+            };
+            
+            return this;
+          }
+        },
         visual: {
           TextStim: function() { return this; },
           ImageStim: function() { return this; }
+        },
+        // Add proper scheduler methods
+        schedule: function(task) {
+          addDebugMessage('PsychoJS.schedule called');
+          // Store the task if needed
+          return this;
+        },
+        scheduleCondition: function(condition, thenScheduler, elseScheduler) {
+          addDebugMessage('PsychoJS.scheduleCondition called');
+          // Store the condition callback for later use
+          window._psychoJSSchedulerConditionCallback = function() {
+            addDebugMessage('Checking scheduler condition...');
+            try {
+              const result = condition();
+              addDebugMessage('Condition result: ' + result);
+              
+              if (result) {
+                addDebugMessage('Continuing with flow scheduler');
+                // If the condition is met, start the experiment
+                if (thenScheduler && typeof thenScheduler.start === 'function') {
+                  thenScheduler.start();
+                }
+              } else {
+                addDebugMessage('Condition not met, using else scheduler');
+                // Otherwise use the else path
+                if (elseScheduler && typeof elseScheduler.start === 'function') {
+                  elseScheduler.start();
+                }
+              }
+            } catch (error) {
+              addDebugMessage('Error in scheduler condition: ' + error);
+              showError('Failed to check experiment flow condition: ' + error);
+            }
+          };
+          return this;
         },
         // Add GUI stub implementation
         gui: {
@@ -264,7 +370,7 @@
             
             // Create a simple dialog component
             this.dialogComponent = {
-              button: 'OK',  // Default to OK so the experiment will continue
+              button: null,  // Start with null, will be set to 'OK' on submission
               data: params.dictionary || {}
             };
             
@@ -311,11 +417,20 @@
                 }
               }
               
+              // Set dialog as completed successfully
+              this.dialogComponent.button = 'OK';
+              
               // Remove the form
               document.body.removeChild(expInfoDiv);
               
               addDebugMessage('Experiment info collected: ' + JSON.stringify(this.dialogComponent.data));
               updateStatus('Starting experiment...');
+              
+              // Ensure the experiment continues by manually triggering the condition check
+              // This is important for the flow scheduler to continue
+              if (window._psychoJSSchedulerConditionCallback) {
+                setTimeout(window._psychoJSSchedulerConditionCallback, 100);
+              }
             });
             
             return this;
