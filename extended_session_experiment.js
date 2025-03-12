@@ -13,7 +13,12 @@ const { round } = util;
 
 // store info about the experiment session:
 let expName = 'extended_session_experiment';  // from the Builder filename that created this script
-let expInfo = {'participant': '', 'session': '001'};
+let expInfo = {
+  'participant': '', 
+  'session': '001',
+  'screen_resolution': '1920x1080',
+  'webcam': 'Default'
+};
 
 // Start code blocks for 'Before Experiment'
 // init psychoJS:
@@ -91,6 +96,45 @@ async function updateInfo() {
   expInfo['psychopyVersion'] = '2021.2.3';
   expInfo['OS'] = window.navigator.platform;
 
+  // Get actual screen resolution
+  const actualWidth = window.screen.width;
+  const actualHeight = window.screen.height;
+  const actualResolution = `${actualWidth}x${actualHeight}`;
+  
+  // Update default resolution if we can detect it
+  if (actualWidth > 0 && actualHeight > 0) {
+    expInfo['screen_resolution'] = actualResolution;
+  }
+  
+  // Populate webcam options before showing dialog
+  try {
+    // Get list of available video devices
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const videoDevices = devices.filter(device => device.kind === 'videoinput');
+    
+    // Create webcam options object for the dialog
+    if (videoDevices.length > 0) {
+      // Create a dictionary of webcam options
+      const webcamOptions = {};
+      webcamOptions['Default'] = 'Default';
+      
+      videoDevices.forEach((device, index) => {
+        const label = device.label || `Camera ${index + 1}`;
+        webcamOptions[device.deviceId] = label;
+      });
+      
+      // Add webcam options to experiment info
+      expInfo['webcam'] = {
+        options: webcamOptions,
+        selected: 'Default'
+      };
+      
+      console.log('Available webcams:', webcamOptions);
+    }
+  } catch (err) {
+    console.error('Error enumerating video devices:', err);
+  }
+
   // store frame rate of monitor if we can measure it successfully
   expInfo['frameRate'] = psychoJS.window.getActualFrameRate();
   if (typeof expInfo['frameRate'] !== 'undefined')
@@ -98,6 +142,27 @@ async function updateInfo() {
   else
     frameDur = 1.0 / 60.0; // couldn't get a reliable measure so guess
 
+  // Parse screen resolution after dialog
+  if (typeof expInfo['screen_resolution'] === 'string') {
+    const parts = expInfo['screen_resolution'].split('x');
+    if (parts.length === 2) {
+      window.screenWidth = parseInt(parts[0], 10) || actualWidth;
+      window.screenHeight = parseInt(parts[1], 10) || actualHeight;
+    } else {
+      window.screenWidth = actualWidth;
+      window.screenHeight = actualHeight;
+    }
+  } else {
+    window.screenWidth = actualWidth;
+    window.screenHeight = actualHeight;
+  }
+  
+  // Store resolution in experiment data
+  psychoJS.experiment.addData('screenWidth', window.screenWidth);
+  psychoJS.experiment.addData('screenHeight', window.screenHeight);
+  psychoJS.experiment.addData('actualScreenWidth', actualWidth);
+  psychoJS.experiment.addData('actualScreenHeight', actualHeight);
+  
   // add info from the URL:
   util.addInfoFromUrl(expInfo);
   
@@ -1937,6 +2002,28 @@ async function initializeWebGazer() {
       window.webgazer.params.showFaceFeedbackBox = true;
       window.webgazer.params.showFaceOverlay = false;
       window.webgazer.params.showGazeDot = false;
+      
+      // Set up webcam selection if a specific one was chosen
+      if (expInfo.webcam && expInfo.webcam !== 'Default' && expInfo.webcam !== '') {
+        try {
+          console.log('Setting up selected webcam:', expInfo.webcam);
+          
+          // Set the webcam device ID if it's not the default
+          if (typeof window.webgazer.setVideoElementConstraints === 'function') {
+            const constraints = {
+              video: {
+                deviceId: { exact: expInfo.webcam }
+              }
+            };
+            window.webgazer.setVideoElementConstraints(constraints);
+            console.log('Webcam constraints set successfully');
+          } else {
+            console.warn('WebGazer does not support setVideoElementConstraints');
+          }
+        } catch (webcamErr) {
+          console.error('Error setting webcam:', webcamErr);
+        }
+      }
       
       // Set up WebGazer
       await window.webgazer.setRegression('ridge')
