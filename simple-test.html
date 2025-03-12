@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simple Eye Tracking Test</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background: #f0f0f0;
+    }
+    #app {
+      max-width: 800px;
+      margin: 0 auto;
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    h1 {
+      text-align: center;
+      color: #333;
+    }
+    button {
+      background: #4CAF50;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+      margin: 10px 0;
+    }
+    button:hover {
+      background: #45a049;
+    }
+    #calibration-points {
+      position: relative;
+      width: 100%;
+      height: 400px;
+      border: 1px solid #ddd;
+      margin: 20px 0;
+    }
+    .calibration-point {
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      background: red;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+    }
+    #webcam-container {
+      margin: 20px auto;
+      width: 320px;
+      height: 240px;
+      border: 1px solid #ddd;
+      background: #eee;
+      position: relative;
+      overflow: hidden;
+    }
+    #log {
+      height: 150px;
+      overflow-y: auto;
+      border: 1px solid #ddd;
+      padding: 10px;
+      font-family: monospace;
+      font-size: 12px;
+      margin-top: 20px;
+      background: #f9f9f9;
+    }
+    .section {
+      display: none;
+      margin: 20px 0;
+    }
+    .active {
+      display: block;
+    }
+    #tracking-target {
+      position: absolute;
+      width: 30px;
+      height: 30px;
+      background: green;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+    }
+    #gaze-point {
+      position: absolute;
+      width: 10px;
+      height: 10px;
+      background: blue;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 10;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <h1>Simple Eye Tracking Test</h1>
+    
+    <!-- Introduction Section -->
+    <div id="intro-section" class="section active">
+      <h2>Welcome to the Eye Tracking Test</h2>
+      <p>This simplified test will help us check if eye tracking is working on your device.</p>
+      <p>You'll need to allow camera access when prompted.</p>
+      <button id="start-btn">Start Test</button>
+    </div>
+    
+    <!-- Calibration Section -->
+    <div id="calibration-section" class="section">
+      <h2>Calibration</h2>
+      <p>Look at each dot and click on it with your mouse when it turns green.</p>
+      <div id="calibration-points"></div>
+      <div id="webcam-container"></div>
+      <button id="skip-calibration-btn">Skip Calibration</button>
+    </div>
+    
+    <!-- Tracking Test Section -->
+    <div id="tracking-section" class="section">
+      <h2>Tracking Test</h2>
+      <p>Follow the green dot with your eyes. Your gaze is shown as a blue dot.</p>
+      <div id="tracking-area" style="position: relative; width: 100%; height: 400px; border: 1px solid #ddd;">
+        <div id="tracking-target"></div>
+        <div id="gaze-point"></div>
+      </div>
+      <button id="end-test-btn">End Test</button>
+    </div>
+    
+    <!-- Results Section -->
+    <div id="results-section" class="section">
+      <h2>Results</h2>
+      <p>Test complete!</p>
+      <div id="accuracy-results"></div>
+      <button id="restart-btn">Restart Test</button>
+    </div>
+    
+    <div id="log"></div>
+  </div>
+
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script>
+    // Log function
+    function log(message) {
+      const logElement = document.getElementById('log');
+      const timestamp = new Date().toLocaleTimeString();
+      const entry = document.createElement('div');
+      entry.textContent = `[${timestamp}] ${message}`;
+      logElement.appendChild(entry);
+      logElement.scrollTop = logElement.scrollHeight;
+      console.log(message);
+    }
+
+    // Show active section, hide others
+    function showSection(sectionId) {
+      document.querySelectorAll('.section').forEach(section => {
+        section.classList.remove('active');
+      });
+      document.getElementById(sectionId).classList.add('active');
+      log(`Showing section: ${sectionId}`);
+    }
+
+    // Initialize webgazer
+    async function initWebgazer() {
+      try {
+        log('Loading WebGazer script...');
+        await loadScript('./webgazer-2.0.1.js');
+        
+        log('Initializing WebGazer...');
+        webgazer.setGazeListener(function(data, elapsedTime) {
+          if (data == null) return;
+          
+          // Update gaze point
+          const gazePoint = document.getElementById('gaze-point');
+          if (gazePoint) {
+            gazePoint.style.left = data.x + 'px';
+            gazePoint.style.top = data.y + 'px';
+          }
+        })
+        .begin();
+        
+        log('WebGazer initialized successfully');
+        return true;
+      } catch (error) {
+        log('Error initializing WebGazer: ' + error);
+        return false;
+      }
+    }
+
+    // Load script dynamically
+    function loadScript(src) {
+      return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = src;
+        script.onload = resolve;
+        script.onerror = () => {
+          log(`Failed to load script: ${src}`);
+          reject(new Error(`Failed to load script: ${src}`));
+        };
+        document.head.appendChild(script);
+      });
+    }
+
+    // Setup calibration points
+    function setupCalibration() {
+      const container = document.getElementById('calibration-points');
+      const positions = [
+        {x: '10%', y: '10%'},
+        {x: '50%', y: '10%'},
+        {x: '90%', y: '10%'},
+        {x: '10%', y: '50%'},
+        {x: '50%', y: '50%'},
+        {x: '90%', y: '50%'},
+        {x: '10%', y: '90%'},
+        {x: '50%', y: '90%'},
+        {x: '90%', y: '90%'}
+      ];
+      
+      positions.forEach((pos, index) => {
+        const point = document.createElement('div');
+        point.className = 'calibration-point';
+        point.style.left = pos.x;
+        point.style.top = pos.y;
+        point.style.display = index === 0 ? 'block' : 'none';
+        point.dataset.index = index;
+        container.appendChild(point);
+      });
+    }
+
+    // Start calibration process
+    function startCalibration() {
+      const points = document.querySelectorAll('.calibration-point');
+      let currentPoint = 0;
+      
+      points[0].style.background = 'green';
+      
+      function handlePointClick() {
+        // Register click with webgazer
+        if (typeof webgazer !== 'undefined') {
+          webgazer.recordClick(
+            parseInt(this.style.left),
+            parseInt(this.style.top)
+          );
+        }
+        
+        // Hide current point
+        this.style.display = 'none';
+        
+        // Show next point or finish
+        currentPoint++;
+        if (currentPoint < points.length) {
+          points[currentPoint].style.display = 'block';
+          points[currentPoint].style.background = 'green';
+          points[currentPoint].addEventListener('click', handlePointClick);
+        } else {
+          log('Calibration complete');
+          showSection('tracking-section');
+          startTracking();
+        }
+      }
+      
+      points[0].addEventListener('click', handlePointClick);
+    }
+
+    // Start tracking test
+    function startTracking() {
+      const trackingArea = document.getElementById('tracking-area');
+      const target = document.getElementById('tracking-target');
+      const areaWidth = trackingArea.clientWidth;
+      const areaHeight = trackingArea.clientHeight;
+      
+      function moveTarget() {
+        const x = Math.random() * (areaWidth - 30);
+        const y = Math.random() * (areaHeight - 30);
+        target.style.left = x + 'px';
+        target.style.top = y + 'px';
+        
+        setTimeout(moveTarget, 2000); // Move every 2 seconds
+      }
+      
+      moveTarget();
+    }
+
+    // Setup event listeners
+    document.addEventListener('DOMContentLoaded', function() {
+      log('Page loaded');
+      
+      document.getElementById('start-btn').addEventListener('click', async function() {
+        log('Starting test...');
+        const webgazerLoaded = await initWebgazer();
+        
+        if (webgazerLoaded) {
+          setupCalibration();
+          showSection('calibration-section');
+          startCalibration();
+        } else {
+          log('ERROR: Could not initialize eye tracking');
+        }
+      });
+      
+      document.getElementById('skip-calibration-btn').addEventListener('click', function() {
+        showSection('tracking-section');
+        startTracking();
+      });
+      
+      document.getElementById('end-test-btn').addEventListener('click', function() {
+        showSection('results-section');
+        if (typeof webgazer !== 'undefined') {
+          webgazer.end();
+        }
+      });
+      
+      document.getElementById('restart-btn').addEventListener('click', function() {
+        location.reload();
+      });
+    });
+  </script>
+</body>
+</html> 

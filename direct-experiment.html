@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Eye Tracking Experiment</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #1a1a1a;
+      color: white;
+    }
+    #experiment-container {
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .screen {
+      display: none;
+      min-height: 600px;
+    }
+    .screen.active {
+      display: block;
+    }
+    h1, h2 {
+      text-align: center;
+    }
+    .button {
+      background: #4CAF50;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      margin: 10px 0;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+      display: inline-block;
+    }
+    .button:hover {
+      background: #45a049;
+    }
+    .centered {
+      text-align: center;
+      margin: 20px 0;
+    }
+    #calibration-area, #tracking-area {
+      position: relative;
+      width: 100%;
+      height: 500px;
+      border: 1px solid #444;
+      margin: 20px 0;
+      background: #222;
+    }
+    .calibration-point {
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      background: red;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+    }
+    #tracking-target {
+      position: absolute;
+      width: 30px;
+      height: 30px;
+      background: green;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+    }
+    #gaze-point {
+      position: absolute;
+      width: 15px;
+      height: 15px;
+      background: rgba(0, 128, 255, 0.7);
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 100;
+    }
+    #debug-panel {
+      position: fixed;
+      bottom: 10px;
+      right: 10px;
+      width: 300px;
+      height: 200px;
+      background: rgba(0, 0, 0, 0.8);
+      border: 1px solid #444;
+      padding: 10px;
+      overflow-y: auto;
+      font-family: monospace;
+      font-size: 12px;
+      z-index: 1000;
+    }
+    .webcam-box {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      width: 200px;
+      height: 150px;
+      border: 1px solid #444;
+      z-index: 900;
+      background: #333;
+    }
+    .stats {
+      position: fixed;
+      bottom: 220px;
+      right: 10px;
+      width: 300px;
+      background: rgba(0, 0, 0, 0.8);
+      border: 1px solid #444;
+      padding: 10px;
+      font-family: monospace;
+      font-size: 12px;
+      z-index: 1000;
+    }
+  </style>
+</head>
+<body>
+  <div id="experiment-container">
+    <!-- Welcome Screen -->
+    <div id="welcome-screen" class="screen active">
+      <h1>Eye Tracking Experiment</h1>
+      <p>Welcome to the eye tracking experiment. You will need to allow camera access for this experiment to work.</p>
+      <p>The experiment will proceed in the following steps:</p>
+      <ol>
+        <li>Setup and camera calibration</li>
+        <li>Tracking task (follow the green dot with your eyes)</li>
+        <li>Results and data collection</li>
+      </ol>
+      <div class="centered">
+        <button id="start-btn" class="button">Begin Experiment</button>
+      </div>
+    </div>
+    
+    <!-- Calibration Screen -->
+    <div id="calibration-screen" class="screen">
+      <h2>Eye Tracking Calibration</h2>
+      <p>Please look at each point and click on it with your mouse when it turns green.</p>
+      <p>Try to keep your head still during calibration for best results.</p>
+      <div id="calibration-area"></div>
+      <div class="centered">
+        <button id="skip-calibration-btn" class="button">Skip Calibration</button>
+      </div>
+    </div>
+    
+    <!-- Tracking Screen -->
+    <div id="tracking-screen" class="screen">
+      <h2>Tracking Task</h2>
+      <p>Follow the green dot with your eyes. Your gaze is shown as a blue dot.</p>
+      <div id="tracking-area">
+        <div id="tracking-target"></div>
+      </div>
+      <div class="centered">
+        <button id="end-test-btn" class="button">End Test</button>
+      </div>
+    </div>
+    
+    <!-- Results Screen -->
+    <div id="results-screen" class="screen">
+      <h2>Test Results</h2>
+      <div id="results-content">
+        <p>Thank you for participating in the eye tracking experiment.</p>
+        <p>Your data has been collected and will be used for research purposes.</p>
+      </div>
+      <div class="centered">
+        <button id="export-data-btn" class="button">Export Gaze Data</button>
+        <button id="restart-btn" class="button">Restart Experiment</button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Debug & Status Elements -->
+  <div id="gaze-point"></div>
+  <div id="webcam-container" class="webcam-box"></div>
+  <div class="stats">
+    <div>Gaze X: <span id="gaze-x">0</span></div>
+    <div>Gaze Y: <span id="gaze-y">0</span></div>
+    <div>Points: <span id="point-count">0</span></div>
+  </div>
+  <div id="debug-panel"></div>
+  
+  <script>
+    // Global variables
+    let gazeData = [];
+    let calibrationPoints = [];
+    let currentPoint = 0;
+    let pointsCollected = 0;
+    
+    // Utility functions
+    function log(message) {
+      const debugPanel = document.getElementById('debug-panel');
+      const timestamp = new Date().toLocaleTimeString();
+      const entry = document.createElement('div');
+      entry.textContent = `[${timestamp}] ${message}`;
+      debugPanel.appendChild(entry);
+      debugPanel.scrollTop = debugPanel.scrollHeight;
+      console.log(message);
+    }
+    
+    function showScreen(screenId) {
+      document.querySelectorAll('.screen').forEach(screen => {
+        screen.classList.remove('active');
+      });
+      document.getElementById(screenId).classList.add('active');
+      log(`Showing screen: ${screenId}`);
+    }
+    
+    // Load WebGazer script
+    function loadWebGazer() {
+      return new Promise((resolve, reject) => {
+        log('Loading WebGazer...');
+        const script = document.createElement('script');
+        script.src = './webgazer-2.0.1.js';
+        script.onload = () => {
+          log('WebGazer loaded successfully');
+          resolve(true);
+        };
+        script.onerror = () => {
+          log('Failed to load WebGazer, trying alternative source...');
+          const altScript = document.createElement('script');
+          altScript.src = './webgazer-2.0.1.tp.js';
+          altScript.onload = () => {
+            log('Alternative WebGazer loaded successfully');
+            resolve(true);
+          };
+          altScript.onerror = () => {
+            log('ERROR: Failed to load WebGazer');
+            reject(new Error('Failed to load WebGazer'));
+          };
+          document.head.appendChild(altScript);
+        };
+        document.head.appendChild(script);
+      });
+    }
+    
+    // Initialize WebGazer
+    async function initWebGazer() {
+      try {
+        log('Initializing WebGazer...');
+        
+        // Set up the video feed
+        webgazer.params.showVideo = true;
+        webgazer.params.showFaceOverlay = true;
+        webgazer.params.showFaceFeedbackBox = true;
+        
+        // Set gaze listener
+        webgazer.setGazeListener(function(data, elapsedTime) {
+          if (data == null) return;
+          
+          // Store gaze data
+          const point = {
+            x: data.x,
+            y: data.y,
+            timestamp: Date.now()
+          };
+          gazeData.push(point);
+          pointsCollected++;
+          
+          // Update gaze point visualization
+          const gazePoint = document.getElementById('gaze-point');
+          gazePoint.style.left = point.x + 'px';
+          gazePoint.style.top = point.y + 'px';
+          
+          // Update stats
+          document.getElementById('gaze-x').textContent = Math.round(point.x);
+          document.getElementById('gaze-y').textContent = Math.round(point.y);
+          document.getElementById('point-count').textContent = pointsCollected;
+        });
+        
+        // Start WebGazer
+        await webgazer.begin();
+        log('WebGazer initialized and running');
+        
+        // Set up video container
+        const videoElement = document.getElementById('webgazerVideoFeed');
+        if (videoElement) {
+          const webcamContainer = document.getElementById('webcam-container');
+          webcamContainer.appendChild(videoElement);
+          videoElement.style.width = '100%';
+          videoElement.style.height = '100%';
+        }
+        
+        return true;
+      } catch (error) {
+        log('ERROR initializing WebGazer: ' + error.message);
+        return false;
+      }
+    }
+    
+    // Set up calibration points
+    function setupCalibration() {
+      const container = document.getElementById('calibration-area');
+      container.innerHTML = '';
+      
+      const positions = [
+        {x: '10%', y: '10%'},
+        {x: '50%', y: '10%'},
+        {x: '90%', y: '10%'},
+        {x: '10%', y: '50%'},
+        {x: '50%', y: '50%'},
+        {x: '90%', y: '50%'},
+        {x: '10%', y: '90%'},
+        {x: '50%', y: '90%'},
+        {x: '90%', y: '90%'}
+      ];
+      
+      positions.forEach((pos, index) => {
+        const point = document.createElement('div');
+        point.className = 'calibration-point';
+        point.style.left = pos.x;
+        point.style.top = pos.y;
+        point.style.display = index === 0 ? 'block' : 'none';
+        point.dataset.index = index;
+        container.appendChild(point);
+      });
+      
+      // Show first point
+      const firstPoint = document.querySelector('.calibration-point');
+      firstPoint.style.background = 'green';
+      
+      // Set up click handler for calibration
+      container.onclick = function(e) {
+        if (e.target.classList.contains('calibration-point')) {
+          // Record click for WebGazer
+          if (typeof webgazer !== 'undefined') {
+            const rect = e.target.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            webgazer.recordClick(centerX, centerY);
+            log(`Calibration point clicked at ${centerX}, ${centerY}`);
+          }
+          
+          // Hide current point
+          e.target.style.display = 'none';
+          
+          // Show next point or finish
+          currentPoint++;
+          if (currentPoint < 9) {
+            const nextPoint = document.querySelector(`.calibration-point[data-index="${currentPoint}"]`);
+            nextPoint.style.display = 'block';
+            nextPoint.style.background = 'green';
+          } else {
+            log('Calibration complete');
+            showScreen('tracking-screen');
+            startTracking();
+          }
+        }
+      };
+    }
+    
+    // Start tracking task
+    function startTracking() {
+      const trackingArea = document.getElementById('tracking-area');
+      const target = document.getElementById('tracking-target');
+      const areaWidth = trackingArea.clientWidth;
+      const areaHeight = trackingArea.clientHeight;
+      
+      function moveTarget() {
+        const x = Math.random() * (areaWidth - 50);
+        const y = Math.random() * (areaHeight - 50);
+        target.style.left = x + 'px';
+        target.style.top = y + 'px';
+        
+        // Record target position
+        calibrationPoints.push({
+          x: x + 25, // center of target
+          y: y + 25,
+          timestamp: Date.now()
+        });
+        
+        // Move target every 2 seconds
+        setTimeout(moveTarget, 2000);
+      }
+      
+      moveTarget();
+    }
+    
+    // Finish experiment and show results
+    function finishExperiment() {
+      // Stop WebGazer
+      if (typeof webgazer !== 'undefined') {
+        webgazer.end();
+      }
+      
+      // Calculate some basic stats
+      const pointCount = gazeData.length;
+      const duration = pointCount > 0 ? (gazeData[pointCount-1].timestamp - gazeData[0].timestamp) / 1000 : 0;
+      const pointsPerSecond = duration > 0 ? pointCount / duration : 0;
+      
+      // Display results
+      const resultsContent = document.getElementById('results-content');
+      resultsContent.innerHTML = `
+        <p>Thank you for participating in the eye tracking experiment.</p>
+        <p>Here are some basic statistics:</p>
+        <ul>
+          <li>Gaze data points collected: ${pointCount}</li>
+          <li>Experiment duration: ${duration.toFixed(2)} seconds</li>
+          <li>Collection rate: ${pointsPerSecond.toFixed(2)} points/second</li>
+        </ul>
+        <p>Your data has been collected and will be used for research purposes.</p>
+      `;
+      
+      showScreen('results-screen');
+    }
+    
+    // Initialize experiment when page loads
+    document.addEventListener('DOMContentLoaded', function() {
+      log('Experiment page loaded');
+      
+      // Set up event listeners
+      document.getElementById('start-btn').addEventListener('click', async function() {
+        log('Starting experiment...');
+        
+        try {
+          // Load and initialize WebGazer
+          await loadWebGazer();
+          const success = await initWebGazer();
+          
+          if (success) {
+            setupCalibration();
+            showScreen('calibration-screen');
+          } else {
+            log('ERROR: Failed to initialize eye tracking');
+            alert('Could not initialize eye tracking. Please check your camera permissions and try again.');
+          }
+        } catch (error) {
+          log('ERROR: ' + error.message);
+          alert('Error: ' + error.message);
+        }
+      });
+      
+      document.getElementById('skip-calibration-btn').addEventListener('click', function() {
+        log('Skipping calibration');
+        showScreen('tracking-screen');
+        startTracking();
+      });
+      
+      document.getElementById('end-test-btn').addEventListener('click', function() {
+        log('Ending test');
+        finishExperiment();
+      });
+      
+      document.getElementById('restart-btn').addEventListener('click', function() {
+        log('Restarting experiment');
+        location.reload();
+      });
+      
+      document.getElementById('export-data-btn').addEventListener('click', function() {
+        log('Exporting gaze data');
+        exportGazeData();
+      });
+    });
+    
+    function exportGazeData() {
+      // Prepare CSV content
+      let csvContent = "data:text/csv;charset=utf-8,";
+      
+      // Add header row
+      csvContent += "timestamp,x,y\n";
+      
+      // Add data rows
+      gazeData.forEach(point => {
+        csvContent += `${point.timestamp},${point.x},${point.y}\n`;
+      });
+      
+      // Create download link
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", "eye_tracking_data.csv");
+      document.body.appendChild(link);
+      
+      // Trigger download
+      link.click();
+      document.body.removeChild(link);
+      
+      log('Exported gaze data to CSV file');
+    }
+    
+    function updateDebugPanel() {
+      const debugPanel = document.getElementById('debug-panel');
+      
+      // Add export button to debug panel
+      if (!document.getElementById('debug-export-btn')) {
+        const exportBtn = document.createElement('button');
+        exportBtn.id = 'debug-export-btn';
+        exportBtn.className = 'button';
+        exportBtn.style.margin = '5px 0';
+        exportBtn.style.padding = '5px 10px';
+        exportBtn.style.fontSize = '12px';
+        exportBtn.textContent = 'Export Gaze Data';
+        exportBtn.addEventListener('click', exportGazeData);
+        
+        // Add to the top of the debug panel
+        debugPanel.insertBefore(exportBtn, debugPanel.firstChild);
+      }
+      
+      // Update data count in debug panel
+      const dataCountElem = document.getElementById('debug-data-count') || document.createElement('div');
+      dataCountElem.id = 'debug-data-count';
+      dataCountElem.textContent = `Gaze data points: ${gazeData.length}`;
+      
+      if (!document.getElementById('debug-data-count')) {
+        debugPanel.insertBefore(dataCountElem, debugPanel.firstChild.nextSibling);
+      }
+    }
+    
+    // Call this periodically to update the debug panel
+    setInterval(updateDebugPanel, 1000);
+  </script>
+</body>
+</html> 
