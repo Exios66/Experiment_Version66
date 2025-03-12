@@ -115,6 +115,7 @@ var calibrationTxt;
 var calibrationMouse;
 var calibrationClock;
 var calibration_square;
+var calibrationDot;
 var calibrationClick;
 var trackingTrialClock;
 var tracking_square;
@@ -271,6 +272,17 @@ async function experimentInit() {
     lineWidth: 1.0, lineColor: new util.Color('white'),
     fillColor: new util.Color('white'),
     opacity: undefined, depth: -1, interpolate: true,
+  });
+  
+  // Add calibration dot for eye tracking trials
+  calibrationDot = new visual.Polygon({
+    win: psychoJS.window,
+    name: 'calibrationDot',
+    edges: 32, size: [0.03, 0.03],
+    ori: 0, pos: [0, 0],
+    lineWidth: 1, lineColor: new util.Color([1, 1, 1]),
+    fillColor: new util.Color([1, 0, 0]),
+    opacity: 1, depth: -2, interpolate: true,
   });
   
   calibrationClick = new core.Mouse({
