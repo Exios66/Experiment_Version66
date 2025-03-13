@@ -57,6 +57,97 @@ const psychoJS = new PsychoJS({
   topLevelStatus: true
 });
 
+// Add window event listeners for crash protection
+window.addEventListener('beforeunload', function(event) {
+  // Force data export before the page unloads
+  if (window.gazeDataBuffer && window.gazeDataBuffer.length > 0) {
+    try {
+      // Create emergency backup of data
+      const emergencyData = {
+        timestamp: Date.now(),
+        sessionId: expInfo.participant + '_' + expInfo.session,
+        reason: 'page_unload',
+        gazePoints: window.gazeDataBuffer,
+        masterData: window.masterGazeData || []
+      };
+      
+      // Use synchronous localStorage as a last resort to save data
+      localStorage.setItem('emergency_gaze_data', JSON.stringify(emergencyData));
+      console.log('Emergency data saved to localStorage');
+      
+      // Try to save to experiment data if possible
+      if (psychoJS && psychoJS.experiment) {
+        psychoJS.experiment.addData('emergencyGazeData', JSON.stringify(emergencyData));
+        // Force synchronous save attempt
+        psychoJS.experiment.save();
+      }
+    } catch (e) {
+      console.error('Failed to save emergency data:', e);
+    }
+  }
+});
+
+// Add error event listener for crash detection
+window.addEventListener('error', function(event) {
+  console.error('Global error caught:', event.message);
+  // Save data on critical errors
+  if (window.gazeDataBuffer && window.gazeDataBuffer.length > 0) {
+    try {
+      const crashData = {
+        timestamp: Date.now(),
+        sessionId: expInfo.participant + '_' + expInfo.session,
+        reason: 'crash',
+        errorMessage: event.message,
+        errorStack: event.error ? event.error.stack : null,
+        gazePoints: window.gazeDataBuffer,
+        masterData: window.masterGazeData || []
+      };
+      
+      // Save to localStorage
+      localStorage.setItem('crash_gaze_data', JSON.stringify(crashData));
+      
+      // Try to save to experiment data
+      if (psychoJS && psychoJS.experiment) {
+        psychoJS.experiment.addData('crashGazeData', JSON.stringify(crashData));
+        psychoJS.experiment.save();
+      }
+    } catch (e) {
+      console.error('Failed to save crash data:', e);
+    }
+  }
+});
+
+// Add handler for unhandled promise rejections
+window.addEventListener('unhandledrejection', function(event) {
+  console.error('Unhandled Promise Rejection:', event.reason);
+  
+  // Save data on promise rejection
+  if (window.gazeDataBuffer && window.gazeDataBuffer.length > 0) {
+    try {
+      const rejectionData = {
+        timestamp: Date.now(),
+        sessionId: expInfo.participant + '_' + expInfo.session,
+        reason: 'promise_rejection',
+        errorMessage: event.reason ? (event.reason.message || String(event.reason)) : 'Unknown promise rejection',
+        errorStack: event.reason && event.reason.stack ? event.reason.stack : null,
+        gazePoints: window.gazeDataBuffer,
+        masterData: window.masterGazeData || []
+      };
+      
+      // Save to localStorage
+      localStorage.setItem('promise_rejection_data', JSON.stringify(rejectionData));
+      
+      // Try to save to experiment data
+      if (psychoJS && psychoJS.experiment) {
+        psychoJS.experiment.addData('promiseRejectionData', JSON.stringify(rejectionData));
+        psychoJS.experiment.save();
+      }
+    } catch (e) {
+      console.error('Failed to save promise rejection data:', e);
+    }
+  }
+});
+
 // open window:
 psychoJS.openWindow({
   fullscr: true,
@@ -159,6 +250,78 @@ async function experimentInit() {
   window.eyesExitedTimestamp = Date.now();
   window.gazeExportTimer = null; // Initialize timer reference for cleanup
   window.exportFunctionActive = true; // Flag to control export function
+  window.autoSaveEnabled = true; // Enable automatic data saving
+  window.autoSaveInterval = 10000; // Auto-save every 10 seconds
+  
+  // Setup auto-save timer for experiment data
+  window.autoSaveTimer = setInterval(() => {
+    if (window.autoSaveEnabled && psychoJS.experiment) {
+      console.log('Auto-saving experiment data...');
+      psychoJS.experiment.save();
+    }
+  }, window.autoSaveInterval);
+  
+  // Check for any emergency data from previous sessions
+  try {
+    // List of all possible emergency data keys
+    const emergencyDataKeys = [
+      'emergency_gaze_data',
+      'crash_gaze_data',
+      'promise_rejection_data'
+    ];
+    
+    // Check for any custom keys that might have been used
+    const allKeys = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && (key.includes('gaze') || key.includes('eye') || key.includes('track') || 
+                 key.includes('crash') || key.includes('emergency') || key.includes('webgazer'))) {
+        allKeys.push(key);
+      }
+    }
+    
+    // Combine standard and detected keys
+    const keysToCheck = [...new Set([...emergencyDataKeys, ...allKeys])];
+    let recoveredDataCount = 0;
+    
+    // Process all emergency data
+    for (const key of keysToCheck) {
+      const data = localStorage.getItem(key);
+      if (data) {
+        try {
+          // Parse the data to ensure it's valid JSON
+          const parsedData = JSON.parse(data);
+          
+          // Add to experiment data with metadata
+          psychoJS.experiment.addData('recovered_data_type', key);
+          psychoJS.experiment.addData('recovered_data_timestamp', Date.now());
+          psychoJS.experiment.addData(`recovered_${key}`, data);
+          
+          // Log recovery
+          console.log(`Recovered data from localStorage key: ${key}`);
+          recoveredDataCount++;
+          
+          // Remove from localStorage after recovery
+          localStorage.removeItem(key);
+        } catch (parseError) {
+          console.error(`Error parsing recovered data from key ${key}:`, parseError);
+          // Still remove invalid data
+          localStorage.removeItem(key);
+        }
+      }
+    }
+    
+    // Log summary of recovery
+    if (recoveredDataCount > 0) {
+      console.log(`Successfully recovered ${recoveredDataCount} data items from previous sessions`);
+      psychoJS.experiment.addData('recovered_data_count', recoveredDataCount);
+      
+      // Force a save of the recovered data
+      psychoJS.experiment.save();
+    }
+  } catch (e) {
+    console.error('Error recovering previous session data:', e);
+  }
   
   // Initialize storage for calibration data
   window.calibrationPoints = [];
@@ -217,22 +380,6 @@ async function experimentInit() {
     psychoJS.experiment.addData('coordinatePlane', JSON.stringify(window.screenCoordinatePlane));
     
     return true;
-  };
-  
-  // Ensure calibration trials data is loaded
-  window.ensureCalibrationTrialsLoaded = async function() {
-    try {
-      // Check if calibration trials data is already loaded
-      if (!psychoJS.serverManager.getResource('calibration_trials.csv')) {
-        console.log('Loading calibration trials data...');
-        await psychoJS.serverManager.prepareResource('calibration_trials.csv');
-      }
-      return true;
-    } catch (error) {
-      console.error('Failed to load calibration trials:', error);
-      psychoJS.experiment.addData('calibrationTrialsLoadError', error.message);
-      return false;
-    }
   };
   
   webcamWarning = new visual.TextStim({
@@ -398,6 +545,11 @@ function initializeEyetrackingRoutineBegin(snapshot) {
           psychoJS.experiment.addData('gazeExportSuccess', true);
           psychoJS.experiment.addData('gazeExportTimestamp', batchData.timestamp);
           psychoJS.experiment.addData('gazeExportSize', batchData.bufferSize);
+          
+          // Trigger a save after each export to ensure data is persisted
+          if (window.autoSaveEnabled) {
+            psychoJS.experiment.save();
+          }
         } else {
           console.log('No gaze data to export at', new Date().toISOString());
         }
@@ -841,19 +993,149 @@ function startGazeLogging() {
     window.webgazer.begin();
   }
   
+  // Create a download link for manual data export
+  const createDownloadLink = () => {
+    if (!window.masterGazeData || window.masterGazeData.length === 0) {
+      console.log('No gaze data available for manual export');
+      return;
+    }
+    
+    try {
+      // Convert data to CSV format
+      const headers = ['timestamp', 'x', 'y', 'trialIndex', 'trialPhase'];
+      const csvRows = [headers.join(',')];
+      
+      window.masterGazeData.forEach(point => {
+        const row = [
+          point.timestamp,
+          point.x,
+          point.y,
+          point.trialIndex || -1,
+          point.trialPhase || 'unknown'
+        ];
+        csvRows.push(row.join(','));
+      });
+      
+      const csvContent = csvRows.join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `gaze_data_${Date.now()}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      console.log('Manual data export completed');
+    } catch (error) {
+      console.error('Error during manual data export:', error);
+    }
+  };
+  
+  // Add keyboard shortcut for manual data export (Ctrl+Shift+E)
+  document.addEventListener('keydown', function(event) {
+    if (event.ctrlKey && event.shiftKey && event.key === 'E') {
+      console.log('Manual data export triggered by keyboard shortcut');
+      createDownloadLink();
+    }
+  });
+  
   return true;
 }
 
 function quitPsychoJS(message, isCompleted) {
-  // Check if ongoing timers should be stopped
+  console.log('Quitting experiment with message:', message, 'isCompleted:', isCompleted);
+  
+  // Force final data export
+  try {
+    // Export any remaining gaze data
+    if (window.gazeDataBuffer && window.gazeDataBuffer.length > 0) {
+      const finalBatchData = {
+        timestamp: Date.now(),
+        sessionId: expInfo.participant + '_' + expInfo.session,
+        frameRate: expInfo.frameRate,
+        gazePoints: window.gazeDataBuffer,
+        isFinal: true,
+        bufferSize: window.gazeDataBuffer.length
+      };
+      
+      // Add final batch to experiment data
+      const batchKey = 'finalGazeBatch_' + finalBatchData.timestamp;
+      psychoJS.experiment.addData(batchKey, JSON.stringify(finalBatchData));
+      console.log('Exported final gaze data batch:', finalBatchData.bufferSize, 'points');
+      
+      // Clear buffer after export
+      window.gazeDataBuffer = [];
+    }
+    
+    // Export master data store if available
+    if (window.masterGazeData && window.masterGazeData.length > 0) {
+      // Create a summary to save space
+      const summary = {
+        totalPoints: window.masterGazeData.length,
+        startTime: window.masterGazeData[0].timestamp,
+        endTime: window.masterGazeData[window.masterGazeData.length - 1].timestamp,
+        duration: window.masterGazeData[window.masterGazeData.length - 1].timestamp - window.masterGazeData[0].timestamp,
+        sampleRate: window.masterGazeData.length / ((window.masterGazeData[window.masterGazeData.length - 1].timestamp - window.masterGazeData[0].timestamp) / 1000)
+      };
+      
+      psychoJS.experiment.addData('masterGazeDataSummary', JSON.stringify(summary));
+      
+      // Save the full data in chunks if it's large
+      const chunkSize = 1000; // Adjust based on data size
+      if (window.masterGazeData.length > chunkSize) {
+        for (let i = 0; i < window.masterGazeData.length; i += chunkSize) {
+          const chunk = window.masterGazeData.slice(i, i + chunkSize);
+          psychoJS.experiment.addData(`masterGazeData_chunk_${i/chunkSize}`, JSON.stringify(chunk));
+        }
+      } else {
+        psychoJS.experiment.addData('masterGazeData', JSON.stringify(window.masterGazeData));
+      }
+      
+      console.log('Exported master gaze data store:', window.masterGazeData.length, 'points');
+    }
+    
+    // Force a final save
+    psychoJS.experiment.save();
+  } catch (error) {
+    console.error('Error during final data export:', error);
+    
+    // Emergency backup to localStorage
+    try {
+      const emergencyData = {
+        timestamp: Date.now(),
+        sessionId: expInfo.participant + '_' + expInfo.session,
+        reason: 'quit_error',
+        errorMessage: error.message,
+        gazeBuffer: window.gazeDataBuffer || [],
+        masterData: window.masterGazeData || []
+      };
+      
+      localStorage.setItem('emergency_gaze_data', JSON.stringify(emergencyData));
+      console.log('Emergency data saved to localStorage due to quit error');
+    } catch (e) {
+      console.error('Failed to save emergency data during quit:', e);
+    }
+  }
+  
+  // Clean up timers
   if (window.gazeExportTimer) {
     clearInterval(window.gazeExportTimer);
+    window.gazeExportTimer = null;
+  }
+  
+  if (window.autoSaveTimer) {
+    clearInterval(window.autoSaveTimer);
+    window.autoSaveTimer = null;
   }
   
   // Clean up WebGazer if it exists
   if (window.webgazer) {
     try {
       window.webgazer.end();
+      console.log('WebGazer ended successfully');
     } catch (err) {
       console.error('Error stopping WebGazer:', err);
     }
