@@ -1,6 +1,27 @@
-# Experiment Version 66 Changelog
+# Changelog
 
-## Version 1.0.0 - 2025-03-04
+## Version 2.1.0 - 2025-03-14
+
+### Added
+
+- Comprehensive crash recovery system with multiple backup mechanisms
+- Auto-export functionality that saves data even when sessions end abruptly
+- Event listeners for all potential crash scenarios:
+  - Page unload events (beforeunload)
+  - JavaScript errors (error event)
+  - Unhandled promise rejections
+- Smart localStorage backup system that preserves data across sessions
+- Manual data export via keyboard shortcut (Ctrl+Shift+E)
+- CSV export option for easier data analysis
+
+### Enhanced
+
+- Completely redesigned quitPsychoJS function with robust data saving
+- Improved data chunking for large datasets to prevent memory issues
+- Auto-save timer that regularly persists experiment data (every 10 seconds)
+- Better error handling and recovery throughout the application
+
+## Version 2.0.0 - 2025-03-04
 
 ### Major Restructuring and Debugging
 
@@ -48,12 +69,45 @@
 - Added willReadFrequently attribute to WebGazer canvas elements for better performance
 - Improved gaze data collection and export
 
-### Startup Improvements
+### Fixed
 
-- Added new start.js script for easier experiment launch
-- Simplified server startup process
+- Resolved duplicate variable declarations throughout the codebase
+- Fixed issues with PsychoJS library loading
+- Improved error handling in WebGazer initialization
+- Enhanced cleanup of resources when experiment ends
 
-### Known Issues
+## Version 1.2.0 - 2024-11-15
 
-- Some files may have incomplete implementations due to size limitations
-- The calibration function in the experiment file needs completion
+### New Features
+
+- Enhanced data collection with trial phase information
+- Improved coordinate plane construction for better spatial tracking
+- Added master data store for complete experiment history
+
+### Improvements
+
+- Better WebGazer initialization with improved error handling
+- Enhanced gaze data collection with more metadata
+- Improved cleanup of WebGazer resources
+
+## Version 1.1.0 - 2024-08-20
+
+### Added Features
+
+- Improved calibration with multi-point system
+- Added coordinate plane construction for better spatial tracking
+- Enhanced data collection with trial phase information
+
+### Bug Fixes
+
+- Resolved issues with WebGazer initialization
+- Fixed calibration point display issues
+
+## Version 1.0.0 - 2024-06-10
+
+### Initial Features
+
+- Initial release of the extended session experiment
+- Basic eye tracking functionality using WebGazer
+- Calibration routine for eye tracking
+- Simple data collection and export
