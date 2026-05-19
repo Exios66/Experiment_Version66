@@ -733,13 +733,13 @@ function initializeEyetrackingRoutineBegin(snapshot) {
           console.log('No gaze data to export at', new Date().toISOString());
         }
       } catch (error) {
-        // Handle export errors gracefully
+        // Handle export errors gracefully; keep buffer so data is not lost
         console.error('Error exporting gaze data:', error);
-        psychoJS.experiment.addData('gazeExportError', error.message);
-        
-        // Attempt recovery by clearing buffer
-        window.gazeDataBuffer = [];
-        window.lastExportTime = Date.now();
+        try {
+          psychoJS.experiment.addData('gazeExportError', error.message);
+        } catch (e) {
+          console.error('Failed to record gaze export error:', e);
+        }
       }
     };
     
