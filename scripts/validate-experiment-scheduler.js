@@ -32,6 +32,16 @@ for (const rel of targets) {
     console.error(`${rel}: broad localStorage recovery would delete WebGazer keys`);
     failed = true;
   }
+
+  const gazeLoggingStart = code.indexOf('function startGazeLogging()');
+  const quitStart = code.indexOf('async function quitPsychoJS', gazeLoggingStart);
+  if (gazeLoggingStart !== -1 && quitStart !== -1) {
+    const startGazeLoggingBody = code.slice(gazeLoggingStart, quitStart);
+    if (/\bsetGazeListener\s*\(/.test(startGazeLoggingBody)) {
+      console.error(`${rel}: startGazeLogging must not replace WebGazer setGazeListener (drops gazeDataBuffer)`);
+      failed = true;
+    }
+  }
 }
 
 process.exit(failed ? 1 : 0);
