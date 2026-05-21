@@ -742,6 +742,7 @@ function initializeEyetrackingRoutineBegin(snapshot) {
         }
       }
     };
+    window.exportGazeData = exportGazeData;
     
     // Set up periodic export
     window.gazeExportTimer = setInterval(() => {
@@ -1887,6 +1888,11 @@ function trackingTrialRoutineEnd() {
     
     tracking_resp.stop();
     
+    // Flush any buffered gaze data before final export
+    if (typeof window.exportGazeData === 'function') {
+      window.exportGazeData();
+    }
+    
     // Save tracking session summary data
     if (window.gazeDataBuffer && window.gazeDataBuffer.length > 0) {
       // Force an immediate export of any remaining gaze data
@@ -1987,10 +1993,10 @@ function importConditions(currentLoop) {
 // Global array to store all gaze data
 window.allGazeData = [];
 
-// Function to start logging gaze coordinates
+// Opens the gaze debug window only; does not replace the primary WebGazer listener.
 function startGazeLogging() {
-  if (window.webgazer && typeof window.webgazer.setGazeListener === 'function') {
-    console.log('Setting up gaze logging');
+  if (window.webgazer) {
+    console.log('Opening gaze debug window (primary listener unchanged)');
     
     // Create a secondary window for gaze data visualization
     const debugWidth = 600;
@@ -2353,157 +2359,9 @@ function startGazeLogging() {
       }, 10000);
     }
     
-    // Set up the gaze listener to collect data
-    window.webgazer.setGazeListener(function(data, elapsedTime) {
-      if (data == null) {
-        return;
-      }
-      
-      // Store the data point with timestamp
-      const dataPoint = {
-        timestamp: new Date().getTime(),
-        x: data.x,
-        y: data.y,
-        elapsedTime: elapsedTime
-      };
-      
-      // Add to our global array
-      window.allGazeData.push(dataPoint);
-      
-      // Log to console periodically (every 50 points to avoid flooding)
-      if (window.allGazeData.length % 50 === 0) {
-        console.log(`Gaze data point collected: [${dataPoint.x.toFixed(2)}, ${dataPoint.y.toFixed(2)}] - Total: ${window.allGazeData.length}`);
-      }
-      
-      // Update the debug window if it exists and is open
-      if (window.gazeDebugWindow && !window.gazeDebugWindow.closed) {
-        try {
-          const logElem = window.gazeDebugWindow.document.getElementById('log');
-          const statsElem = window.gazeDebugWindow.document.getElementById('pointCount');
-          const lastCoordsElem = window.gazeDebugWindow.document.getElementById('lastCoords');
-          const vizElem = window.gazeDebugWindow.document.getElementById('visualization');
-          const heatmapElem = window.gazeDebugWindow.document.getElementById('heatmap');
-          
-          if (logElem && statsElem && lastCoordsElem) {
-            // Update stats
-            statsElem.textContent = window.allGazeData.length;
-            lastCoordsElem.textContent = `x: ${dataPoint.x.toFixed(2)}, y: ${dataPoint.y.toFixed(2)}`;
-            
-            // Increment points collected for rate calculation
-            window.gazeDebugWindow.pointsCollected++;
-            
-            // Add to log (limiting to last 50 entries)
-            const entry = window.gazeDebugWindow.document.createElement('div');
-            entry.textContent = `[${new Date(dataPoint.timestamp).toLocaleTimeString()}] x: ${dataPoint.x.toFixed(2)}, y: ${dataPoint.y.toFixed(2)}`;
-            logElem.appendChild(entry);
-            
-            // Keep only last 50 entries to prevent browser slowdown
-            while (logElem.childNodes.length > 50) {
-              logElem.removeChild(logElem.firstChild);
-            }
-            
-            // Scroll to bottom
-            logElem.scrollTop = logElem.scrollHeight;
-            
-            // Add point to visualization (every 3rd point to avoid clutter)
-            if (window.allGazeData.length % 3 === 0 && vizElem) {
-              const point = window.gazeDebugWindow.document.createElement('div');
-              point.className = 'point';
-              
-              // Get screen dimensions from user input or detection
-              const screenWidth = window.screenWidth || window.screen.width;
-              const screenHeight = window.screenHeight || window.screen.height;
-              
-              // Normalize to visualization area
-              const vizWidth = vizElem.offsetWidth;
-              const vizHeight = vizElem.offsetHeight;
-              const normalizedX = (dataPoint.x / screenWidth) * vizWidth;
-              const normalizedY = (dataPoint.y / screenHeight) * vizHeight;
-              
-              point.style.left = `${normalizedX}px`;
-              point.style.top = `${normalizedY}px`;
-              vizElem.appendChild(point);
-              
-              // Limit visualization points
-              while (vizElem.childNodes.length > 100) {
-                vizElem.removeChild(vizElem.firstChild);
-              }
-              
-              // Add to heatmap (every 5th point)
-              if (window.allGazeData.length % 5 === 0 && heatmapElem) {
-                const heatpoint = window.gazeDebugWindow.document.createElement('div');
-                heatpoint.className = 'heatpoint';
-                heatpoint.style.left = `${normalizedX}px`;
-                heatpoint.style.top = `${normalizedY}px`;
-                heatmapElem.appendChild(heatpoint);
-                
-                // Limit heatmap points
-                while (heatmapElem.childNodes.length > 200) {
-                  heatmapElem.removeChild(heatmapElem.firstChild);
-                }
-              }
-            }
-          }
-        } catch (e) {
-          console.error('Error updating gaze debug window:', e);
-        }
-      } else if (window.allGazeData.length % 100 === 0) {
-        // If debug window was closed, try to reopen it
-        console.log('Debug window closed or not available. Attempting to reopen...');
-        
-        // Create a new debug window
-        const debugWidth = 600;
-        const debugHeight = 700;
-        const windowFeatures = `width=${debugWidth},height=${debugHeight},resizable=yes,scrollbars=yes,status=yes,location=no`;
-        
-        // Open new debug window
-        window.gazeDebugWindow = window.open('', 'WebGazer Debug', windowFeatures);
-        
-        if (window.gazeDebugWindow) {
-          // Initialize the debug window with HTML structure (reuse the same HTML)
-          window.gazeDebugWindow.document.write(`
-            <!DOCTYPE html>
-            <html>
-            <head>
-              <title>👁️ GAZE TRACKING COORDINATES 👁️</title>
-              <style>
-                body { 
-                  font-family: Arial, sans-serif; 
-                  margin: 0; 
-                  padding: 10px; 
-                  background-color: #f0f0f0;
-                }
-                h2 { margin-top: 0; color: #333; text-align: center; }
-                #stats { margin-bottom: 15px; padding: 10px; background: #fff; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-                #log { height: 150px; overflow: auto; border: 1px solid #ccc; padding: 10px; font-family: monospace; font-size: 12px; background: #fff; border-radius: 5px; margin-bottom: 15px; }
-                #visualization, #heatmap { border: 1px solid #ccc; background: #fff; position: relative; height: 200px; margin: 15px 0; border-radius: 5px; overflow: hidden; }
-                .point { position: absolute; width: 6px; height: 6px; background: rgba(255,0,0,0.7); border-radius: 50%; margin-left: -3px; margin-top: -3px; z-index: 2; }
-                .heatpoint { position: absolute; width: 20px; height: 20px; background: radial-gradient(circle, rgba(255,0,0,0.8) 0%, rgba(255,0,0,0) 70%); border-radius: 50%; margin-left: -10px; margin-top: -10px; z-index: 1; }
-              </style>
-            </head>
-            <body>
-              <h2>WebGazer Gaze Data Visualization (Reopened)</h2>
-              <div id="stats">
-                Total points: <span id="pointCount">0</span><br>
-                Last coordinates: <span id="lastCoords">None</span><br>
-              </div>
-              <div id="visualization"></div>
-              <div id="heatmap"></div>
-              <div id="log"></div>
-            </body>
-            </html>
-          `);
-          
-          window.gazeDebugWindow.document.close();
-          window.gazeDebugWindow.focus();
-          console.log('Gaze debug window reopened successfully');
-        }
-      }
-    });
-    
-    console.log('Gaze logging initialized successfully');
+    console.log('Gaze debug window ready; collection uses primary WebGazer listener');
   } else {
-    console.error('WebGazer not available or setGazeListener method not found');
+    console.error('WebGazer not available for gaze debug window');
   }
 }
 
