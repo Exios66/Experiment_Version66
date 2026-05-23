@@ -32,6 +32,27 @@ for (const rel of targets) {
     console.error(`${rel}: broad localStorage recovery would delete WebGazer keys`);
     failed = true;
   }
+
+  const startGazeLoggingBlock = code.match(/function startGazeLogging\(\)[\s\S]*?^}/m);
+  if (startGazeLoggingBlock && startGazeLoggingBlock[0].includes('setGazeListener')) {
+    console.error(`${rel}: startGazeLogging must not replace the primary WebGazer listener`);
+    failed = true;
+  }
+
+  if (!code.includes('window.exportGazeData = exportGazeData')) {
+    console.error(`${rel}: exportGazeData must be exposed on window for buffer flush`);
+    failed = true;
+  }
+
+  if (!code.includes('var calibration_x')) {
+    console.error(`${rel}: calibration_x must be a module-level var (ES module strict mode)`);
+    failed = true;
+  }
+
+  if (code.includes("typeof calibration_x === 'undefined'")) {
+    console.error(`${rel}: must not assign to undeclared calibration_x in strict mode`);
+    failed = true;
+  }
 }
 
 process.exit(failed ? 1 : 0);
