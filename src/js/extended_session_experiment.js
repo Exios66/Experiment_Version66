@@ -359,6 +359,8 @@ var calibrationClock;
 var calibration_square;
 var calibrationClick;
 var calibrationDot;
+var calibration_x;
+var calibration_y;
 var trackingTrialClock;
 var tracking_square;
 var trackingTxt;
@@ -373,6 +375,8 @@ async function experimentInit() {
   // Add these lines to ensure global variables are properly initialized
   window.calibration_x = 0;
   window.calibration_y = 0;
+  calibration_x = 0;
+  calibration_y = 0;
   
   // Initialize global array to store all gaze data points
   window.allGazeData = [];
@@ -1298,27 +1302,12 @@ function calibrationRoutineBegin(snapshot) {
     routineTimer.add(3.500000);
     // update component parameters for each repeat
     
-    // Define default values for calibration_x and calibration_y if they're not defined
-    if (typeof calibration_x === 'undefined') {
-      console.log("Warning: calibration_x was undefined. Using default value of 0.");
-      calibration_x = 0;
-    }
-    if (typeof calibration_y === 'undefined') {
-      console.log("Warning: calibration_y was undefined. Using default value of 0.");
-      calibration_y = 0;
-    }
-    
-    // Enhance defensive coding by ensuring global window variables are also set
-    if (typeof window.calibration_x === 'undefined') {
-      console.log("Warning: window.calibration_x was undefined. Using default value of 0.");
+    if (typeof window.calibration_x === 'undefined' || window.calibration_x === null) {
       window.calibration_x = 0;
     }
-    if (typeof window.calibration_y === 'undefined') {
-      console.log("Warning: window.calibration_y was undefined. Using default value of 0.");
+    if (typeof window.calibration_y === 'undefined' || window.calibration_y === null) {
       window.calibration_y = 0;
     }
-    
-    // Ensure local variables use window global values if available
     calibration_x = window.calibration_x;
     calibration_y = window.calibration_y;
     
@@ -1971,13 +1960,13 @@ function importConditions(currentLoop) {
     
     // Map the CSV column names to the variable names used in the code
     if (typeof currentTrial.Calibrate_X !== 'undefined') {
-      // Bug fix: properly set the Y coordinate rather than overwriting calibrationTxt
       window.calibration_x = currentTrial.Calibrate_X;
+      calibration_x = window.calibration_x;
     }
     
     if (typeof currentTrial.Calibrate_Y !== 'undefined') {
-      // Bug fix: properly set the Y coordinate rather than overwriting calibrationTxt
       window.calibration_y = currentTrial.Calibrate_Y;
+      calibration_y = window.calibration_y;
     }
     
     // For troubleshooting: log the values to make sure they're correctly set
