@@ -32,6 +32,17 @@ for (const rel of targets) {
     console.error(`${rel}: broad localStorage recovery would delete WebGazer keys`);
     failed = true;
   }
+
+  if (code.includes('window.exportGazeData()') && !code.includes('window.exportGazeData = exportGazeData')) {
+    console.error(`${rel}: window.exportGazeData is invoked but never assigned`);
+    failed = true;
+  }
+
+  const startGazeLoggingMatch = code.match(/function startGazeLogging\(\)\s*\{[\s\S]*?\n\}/);
+  if (startGazeLoggingMatch && startGazeLoggingMatch[0].includes('setGazeListener')) {
+    console.error(`${rel}: startGazeLogging must not replace the WebGazer gaze listener`);
+    failed = true;
+  }
 }
 
 process.exit(failed ? 1 : 0);
