@@ -53,6 +53,22 @@ for (const rel of targets) {
     console.error(`${rel}: must not assign to undeclared calibration_x in strict mode`);
     failed = true;
   }
+
+  if (!code.includes('function recordGazeDataPoint(')) {
+    console.error(`${rel}: recordGazeDataPoint helper is required for bounded gaze storage`);
+    failed = true;
+  }
+
+  const quitMatch = code.match(/async function quitPsychoJS[\s\S]*?return Scheduler\.Event\.QUIT;/);
+  if (quitMatch && !quitMatch[0].includes('window.exportGazeData()')) {
+    console.error(`${rel}: quitPsychoJS must flush gazeDataBuffer via exportGazeData`);
+    failed = true;
+  }
+
+  if (!code.includes('eyeTrackingInitFailed')) {
+    console.error(`${rel}: must record and guard WebGazer init failure (eyeTrackingInitFailed)`);
+    failed = true;
+  }
 }
 
 process.exit(failed ? 1 : 0);
