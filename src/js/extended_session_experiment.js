@@ -658,6 +658,39 @@ var t;
 var frameN;
 var continueRoutine;
 var initializeEyetrackingComponents;
+
+/** In-memory cap for debug/fallback gaze history (extended sessions). */
+const MAX_ALL_GAZE_POINTS = 20000;
+
+/**
+ * Store a gaze sample in rolling buffers and trigger batch export when needed.
+ * @param {Object} dataPoint - Gaze sample with x, y, timestamp, etc.
+ */
+function recordGazeDataPoint(dataPoint) {
+  if (!window.allGazeData) {
+    window.allGazeData = [];
+  }
+  window.allGazeData.push(dataPoint);
+  if (window.allGazeData.length > MAX_ALL_GAZE_POINTS) {
+    window.allGazeData.splice(0, window.allGazeData.length - MAX_ALL_GAZE_POINTS);
+  }
+
+  if (window.xGazes && window.yGazes) {
+    window.xGazes.shift();
+    window.xGazes.push(dataPoint.x);
+    window.yGazes.shift();
+    window.yGazes.push(dataPoint.y);
+  }
+
+  if (window.gazeDataBuffer) {
+    window.gazeDataBuffer.push(dataPoint);
+    if (window.gazeDataBuffer.length > 100 &&
+        typeof window.exportGazeData === 'function') {
+      window.exportGazeData();
+    }
+  }
+}
+
 /** 
  * This function initializes the eye tracking component of the experiment
  * It has been updated to incorporate a simpler version for compatibility with older experiment versions
@@ -749,6 +782,19 @@ function initializeEyetrackingRoutineBegin(snapshot) {
       exportGazeData();
     }, window.gazeExportInterval);
     
+    if (!window.webgazer || typeof window.webgazer.setGazeListener !== 'function') {
+      console.error('Cannot start eye tracking: WebGazer is unavailable');
+      psychoJS.experiment.addData('eyeTrackingInitFailed', true);
+      initializeEyetrackingComponents = [];
+      initializeEyetrackingComponents.push(webcamWarning);
+      for (const thisComponent of initializeEyetrackingComponents) {
+        if ('status' in thisComponent) {
+          thisComponent.status = PsychoJS.Status.NOT_STARTED;
+        }
+      }
+      return Scheduler.Event.NEXT;
+    }
+
     // Start eye tracking with enhanced data collection
     window.webgazer
         // Called on each eye tracking update
@@ -772,32 +818,7 @@ function initializeEyetrackingRoutineBegin(snapshot) {
               psychoJS.experiment.currentScheduler.taskName || 'unknown' : 'unknown'
           };
           
-          // Store in global arrays for persistence and different use cases
-          
-          // Primary storage for all gaze data
-          if (!window.allGazeData) {
-            window.allGazeData = [];
-          }
-          window.allGazeData.push(dataPoint);
-          
-          // For moving average calculations (if used in the experiment)
-          if (window.xGazes && window.yGazes) {
-            window.xGazes.shift();
-            window.xGazes.push(data.x);
-            window.yGazes.shift();
-            window.yGazes.push(data.y);
-          }
-          
-          // For buffered exports to reduce memory pressure
-          if (window.gazeDataBuffer) {
-            window.gazeDataBuffer.push(dataPoint);
-            
-            // Auto-export if buffer gets too large
-            if (window.gazeDataBuffer.length > 100 && 
-                typeof window.exportGazeData === 'function') {
-              window.exportGazeData();
-            }
-          }
+          recordGazeDataPoint(dataPoint);
           
           // Log to console periodically to avoid flooding
           if (window.allGazeData.length % 50 === 0) {
@@ -904,8 +925,11 @@ function initializeEyetrackingRoutineEachFrame() {
     frameN = frameN + 1;// number of completed frames (so 0 is the first frame)
     // update/draw components on each frame
     // Finish routine once everything is ready
-    continueRoutine = 
-      !window.webgazer.isReady() || 
+    const webgazerReady = window.webgazer &&
+      typeof window.webgazer.isReady === 'function' &&
+      window.webgazer.isReady();
+    continueRoutine =
+      !webgazerReady ||
       document.getElementById('webgazerFaceFeedbackBox') === null ||
       document.getElementById('webgazerVideoFeed') === null;
     
@@ -2367,6 +2391,13 @@ async function quitPsychoJS(message, isCompleted) {
   }
   
   // Stop eye tracking and save final data
+  if (window.gazeExportTimer) {
+    clearInterval(window.gazeExportTimer);
+    window.gazeExportTimer = null;
+  }
+  if (typeof window.exportGazeData === 'function') {
+    window.exportGazeData();
+  }
   if (window.webgazer) {
     try {
       // Add final eye tracking metrics to experiment data
@@ -2559,32 +2590,7 @@ async function initializeWebGazer() {
                 psychoJS.experiment.currentScheduler.taskName || 'unknown' : 'unknown'
             };
             
-            // Store in global arrays for persistence and different use cases
-            
-            // Primary storage for all gaze data
-            if (!window.allGazeData) {
-              window.allGazeData = [];
-            }
-            window.allGazeData.push(dataPoint);
-            
-            // For moving average calculations (if used in the experiment)
-            if (window.xGazes && window.yGazes) {
-              window.xGazes.shift();
-              window.xGazes.push(data.x);
-              window.yGazes.shift();
-              window.yGazes.push(data.y);
-            }
-            
-            // For buffered exports to reduce memory pressure
-            if (window.gazeDataBuffer) {
-              window.gazeDataBuffer.push(dataPoint);
-              
-              // Auto-export if buffer gets too large
-              if (window.gazeDataBuffer.length > 100 && 
-                  typeof window.exportGazeData === 'function') {
-                window.exportGazeData();
-              }
-            }
+            recordGazeDataPoint(dataPoint);
             
             // Log to console periodically to avoid flooding
             if (window.allGazeData.length % 50 === 0) {
