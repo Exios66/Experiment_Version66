@@ -43,6 +43,32 @@ for (const rel of targets) {
     console.error(`${rel}: startGazeLogging must not replace the WebGazer gaze listener`);
     failed = true;
   }
+
+  if (!code.includes('var calibration_x')) {
+    console.error(`${rel}: calibration_x must be a module-level var (ES module strict mode)`);
+    failed = true;
+  }
+
+  if (code.includes("typeof calibration_x === 'undefined'")) {
+    console.error(`${rel}: must not assign to undeclared calibration_x in strict mode`);
+    failed = true;
+  }
+
+  if (!code.includes('function recordGazeDataPoint(')) {
+    console.error(`${rel}: recordGazeDataPoint helper is required for bounded gaze storage`);
+    failed = true;
+  }
+
+  const quitMatch = code.match(/async function quitPsychoJS[\s\S]*?return Scheduler\.Event\.QUIT;/);
+  if (quitMatch && !quitMatch[0].includes('window.exportGazeData()')) {
+    console.error(`${rel}: quitPsychoJS must flush gazeDataBuffer via exportGazeData`);
+    failed = true;
+  }
+
+  if (!code.includes('eyeTrackingInitFailed')) {
+    console.error(`${rel}: must record and guard WebGazer init failure (eyeTrackingInitFailed)`);
+    failed = true;
+  }
 }
 
 process.exit(failed ? 1 : 0);
