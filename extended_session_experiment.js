@@ -2365,6 +2365,15 @@ async function quitPsychoJS(message, isCompleted) {
   if (psychoJS.experiment.isEntryEmpty()) {
     psychoJS.experiment.nextEntry();
   }
+
+  // Flush buffered gaze batches before shutdown (Escape/early quit skips trackingTrialRoutineEnd)
+  if (window.gazeExportTimer) {
+    clearInterval(window.gazeExportTimer);
+    window.gazeExportTimer = null;
+  }
+  if (typeof window.exportGazeData === 'function') {
+    window.exportGazeData();
+  }
   
   // Stop eye tracking and save final data
   if (window.webgazer) {

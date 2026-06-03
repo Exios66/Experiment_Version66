@@ -43,6 +43,13 @@ for (const rel of targets) {
     console.error(`${rel}: startGazeLogging must not replace the WebGazer gaze listener`);
     failed = true;
   }
+
+  const quitMatch = code.match(/async function quitPsychoJS\([\s\S]*?\n\}/);
+  if (quitMatch && code.includes('window.exportGazeData = exportGazeData') &&
+      !quitMatch[0].includes('window.exportGazeData()')) {
+    console.error(`${rel}: quitPsychoJS must flush gazeDataBuffer via exportGazeData before shutdown`);
+    failed = true;
+  }
 }
 
 process.exit(failed ? 1 : 0);
