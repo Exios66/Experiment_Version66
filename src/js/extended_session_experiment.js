@@ -162,7 +162,9 @@ let expInfo = {
 
 // Start code blocks for 'Before Experiment'
 // init psychoJS:
-const psychoJS = new PsychoJS({
+let psychoJS;
+if (!window.experimentFallbackActive) {
+psychoJS = new PsychoJS({
   debug: true,
   pavlovia: { 
     URL: 'https://pavlovia.org',
@@ -264,7 +266,9 @@ psychoJS.start({
 });
 
 psychoJS.experimentLogger.setLevel(core.Logger.ServerLevel.EXP);
-
+} else {
+  console.warn('Skipped main experiment bootstrap because fallback loader is active');
+}
 
 var frameDur;
 async function updateInfo() {
@@ -701,6 +705,21 @@ function initializeEyetrackingRoutineBegin(snapshot) {
       console.error('WebGazer is still not available after loading attempt');
     }
     
+    if (!window.webgazer) {
+      console.error('WebGazer is not available; skipping eye-tracking initialization');
+      psychoJS.experiment.addData('webgazerInitFailed', true);
+      initializeEyetrackingComponents = [];
+      if (webcamWarning) {
+        initializeEyetrackingComponents.push(webcamWarning);
+      }
+      for (const thisComponent of initializeEyetrackingComponents) {
+        if ('status' in thisComponent) {
+          thisComponent.status = PsychoJS.Status.NOT_STARTED;
+        }
+      }
+      return Scheduler.Event.NEXT;
+    }
+
     // Configure data collection
     const exportGazeData = () => {
       try {
@@ -904,6 +923,9 @@ function initializeEyetrackingRoutineEachFrame() {
     frameN = frameN + 1;// number of completed frames (so 0 is the first frame)
     // update/draw components on each frame
     // Finish routine once everything is ready
+    if (!window.webgazer) {
+      return Scheduler.Event.NEXT;
+    }
     continueRoutine = 
       !window.webgazer.isReady() || 
       document.getElementById('webgazerFaceFeedbackBox') === null ||
@@ -1413,12 +1435,16 @@ function calibrationRoutineEachFrame() {
       }
     }
     
+    const faceFeedbackBox = document.getElementById('webgazerFaceFeedbackBox');
+    const videoFeed = document.getElementById('webgazerVideoFeed');
     if (
-      document.getElementById('webgazerFaceFeedbackBox').style.display != 'none' &&
+      faceFeedbackBox &&
+      videoFeed &&
+      faceFeedbackBox.style.display != 'none' &&
       (new Date).getTime() > window.eyesExitedTimestamp + window.eyesReturnedDelay
     ) {   
-      document.getElementById('webgazerFaceFeedbackBox').style.display = 'none';
-      document.getElementById('webgazerVideoFeed').style.display = 'none';
+      faceFeedbackBox.style.display = 'none';
+      videoFeed.style.display = 'none';
     }
     
     // *calibration_square* updates
@@ -1624,7 +1650,9 @@ function trackingTrialRoutineBegin(snapshot) {
     tracking_resp.rt = undefined;
     _tracking_resp_allKeys = [];
     // Remove the click tracker used for calibration
-    window.webgazer.removeMouseEventListeners();
+    if (window.webgazer && typeof window.webgazer.removeMouseEventListeners === 'function') {
+      window.webgazer.removeMouseEventListeners();
+    }
     
     // Verify the coordinate plane was constructed
     if (!window.screenCoordinatePlane.initialized) {
@@ -1658,8 +1686,14 @@ function trackingTrialRoutineBegin(snapshot) {
                               }));
     
     //hide the video thumbnail 
-    document.getElementById('webgazerFaceFeedbackBox').style.display = 'none';
-    document.getElementById('webgazerVideoFeed').style.display = 'none';
+    const faceFeedbackBox = document.getElementById('webgazerFaceFeedbackBox');
+    const videoFeed = document.getElementById('webgazerVideoFeed');
+    if (faceFeedbackBox) {
+      faceFeedbackBox.style.display = 'none';
+    }
+    if (videoFeed) {
+      videoFeed.style.display = 'none';
+    }
     // keep track of which components have finished
     trackingTrialComponents = [];
     trackingTrialComponents.push(tracking_square);
