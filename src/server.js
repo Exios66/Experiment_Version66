@@ -112,12 +112,27 @@ function checkIfModuleFile(pathname) {
     return false;
 }
 
+function isPathWithinRoot(candidatePath) {
+    const root = path.resolve('.');
+    const resolved = path.resolve(candidatePath);
+    return resolved === root || resolved.startsWith(root + path.sep);
+}
+
 // Create server
 const server = http.createServer((req, res) => {
     console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
     
     // Parse the URL
     const parsedUrl = url.parse(req.url);
+    
+    const relativePath = parsedUrl.pathname === '/' ? 'index.html' : parsedUrl.pathname.replace(/^\//, '');
+    if (path.resolve('.', relativePath) !== path.resolve('.') &&
+        !path.resolve('.', relativePath).startsWith(path.resolve('.') + path.sep)) {
+        console.error(`Forbidden path requested: ${parsedUrl.pathname}`);
+        res.writeHead(403);
+        res.end('Forbidden');
+        return;
+    }
     
     // Extract the path from the URL
     let pathname = '.' + parsedUrl.pathname;
@@ -257,6 +272,13 @@ const server = http.createServer((req, res) => {
         }
     }
     
+    if (!isPathWithinRoot(pathname)) {
+        console.error(`Forbidden resolved path: ${pathname}`);
+        res.writeHead(403);
+        res.end('Forbidden');
+        return;
+    }
+
     // Read the file
     fs.readFile(pathname, (err, data) => {
         if (err) {

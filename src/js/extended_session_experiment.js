@@ -359,6 +359,8 @@ var calibrationClock;
 var calibration_square;
 var calibrationClick;
 var calibrationDot;
+var calibration_x;
+var calibration_y;
 var trackingTrialClock;
 var tracking_square;
 var trackingTxt;
@@ -373,6 +375,8 @@ async function experimentInit() {
   // Add these lines to ensure global variables are properly initialized
   window.calibration_x = 0;
   window.calibration_y = 0;
+  calibration_x = 0;
+  calibration_y = 0;
   
   // Initialize global array to store all gaze data points
   window.allGazeData = [];
@@ -658,6 +662,39 @@ var t;
 var frameN;
 var continueRoutine;
 var initializeEyetrackingComponents;
+
+/** In-memory cap for debug/fallback gaze history (extended sessions). */
+const MAX_ALL_GAZE_POINTS = 20000;
+
+/**
+ * Store a gaze sample in rolling buffers and trigger batch export when needed.
+ * @param {Object} dataPoint - Gaze sample with x, y, timestamp, etc.
+ */
+function recordGazeDataPoint(dataPoint) {
+  if (!window.allGazeData) {
+    window.allGazeData = [];
+  }
+  window.allGazeData.push(dataPoint);
+  if (window.allGazeData.length > MAX_ALL_GAZE_POINTS) {
+    window.allGazeData.splice(0, window.allGazeData.length - MAX_ALL_GAZE_POINTS);
+  }
+
+  if (window.xGazes && window.yGazes) {
+    window.xGazes.shift();
+    window.xGazes.push(dataPoint.x);
+    window.yGazes.shift();
+    window.yGazes.push(dataPoint.y);
+  }
+
+  if (window.gazeDataBuffer) {
+    window.gazeDataBuffer.push(dataPoint);
+    if (window.gazeDataBuffer.length > 100 &&
+        typeof window.exportGazeData === 'function') {
+      window.exportGazeData();
+    }
+  }
+}
+
 /** 
  * This function initializes the eye tracking component of the experiment
  * It has been updated to incorporate a simpler version for compatibility with older experiment versions
@@ -749,6 +786,19 @@ function initializeEyetrackingRoutineBegin(snapshot) {
       exportGazeData();
     }, window.gazeExportInterval);
     
+    if (!window.webgazer || typeof window.webgazer.setGazeListener !== 'function') {
+      console.error('Cannot start eye tracking: WebGazer is unavailable');
+      psychoJS.experiment.addData('eyeTrackingInitFailed', true);
+      initializeEyetrackingComponents = [];
+      initializeEyetrackingComponents.push(webcamWarning);
+      for (const thisComponent of initializeEyetrackingComponents) {
+        if ('status' in thisComponent) {
+          thisComponent.status = PsychoJS.Status.NOT_STARTED;
+        }
+      }
+      return Scheduler.Event.NEXT;
+    }
+
     // Start eye tracking with enhanced data collection
     window.webgazer
         // Called on each eye tracking update
@@ -772,32 +822,7 @@ function initializeEyetrackingRoutineBegin(snapshot) {
               psychoJS.experiment.currentScheduler.taskName || 'unknown' : 'unknown'
           };
           
-          // Store in global arrays for persistence and different use cases
-          
-          // Primary storage for all gaze data
-          if (!window.allGazeData) {
-            window.allGazeData = [];
-          }
-          window.allGazeData.push(dataPoint);
-          
-          // For moving average calculations (if used in the experiment)
-          if (window.xGazes && window.yGazes) {
-            window.xGazes.shift();
-            window.xGazes.push(data.x);
-            window.yGazes.shift();
-            window.yGazes.push(data.y);
-          }
-          
-          // For buffered exports to reduce memory pressure
-          if (window.gazeDataBuffer) {
-            window.gazeDataBuffer.push(dataPoint);
-            
-            // Auto-export if buffer gets too large
-            if (window.gazeDataBuffer.length > 100 && 
-                typeof window.exportGazeData === 'function') {
-              window.exportGazeData();
-            }
-          }
+          recordGazeDataPoint(dataPoint);
           
           // Log to console periodically to avoid flooding
           if (window.allGazeData.length % 50 === 0) {
@@ -904,8 +929,11 @@ function initializeEyetrackingRoutineEachFrame() {
     frameN = frameN + 1;// number of completed frames (so 0 is the first frame)
     // update/draw components on each frame
     // Finish routine once everything is ready
-    continueRoutine = 
-      !window.webgazer.isReady() || 
+    const webgazerReady = window.webgazer &&
+      typeof window.webgazer.isReady === 'function' &&
+      window.webgazer.isReady();
+    continueRoutine =
+      !webgazerReady ||
       document.getElementById('webgazerFaceFeedbackBox') === null ||
       document.getElementById('webgazerVideoFeed') === null;
     
@@ -1298,27 +1326,12 @@ function calibrationRoutineBegin(snapshot) {
     routineTimer.add(3.500000);
     // update component parameters for each repeat
     
-    // Define default values for calibration_x and calibration_y if they're not defined
-    if (typeof calibration_x === 'undefined') {
-      console.log("Warning: calibration_x was undefined. Using default value of 0.");
-      calibration_x = 0;
-    }
-    if (typeof calibration_y === 'undefined') {
-      console.log("Warning: calibration_y was undefined. Using default value of 0.");
-      calibration_y = 0;
-    }
-    
-    // Enhance defensive coding by ensuring global window variables are also set
-    if (typeof window.calibration_x === 'undefined') {
-      console.log("Warning: window.calibration_x was undefined. Using default value of 0.");
+    if (typeof window.calibration_x === 'undefined' || window.calibration_x === null) {
       window.calibration_x = 0;
     }
-    if (typeof window.calibration_y === 'undefined') {
-      console.log("Warning: window.calibration_y was undefined. Using default value of 0.");
+    if (typeof window.calibration_y === 'undefined' || window.calibration_y === null) {
       window.calibration_y = 0;
     }
-    
-    // Ensure local variables use window global values if available
     calibration_x = window.calibration_x;
     calibration_y = window.calibration_y;
     
@@ -1413,12 +1426,16 @@ function calibrationRoutineEachFrame() {
       }
     }
     
+    const faceFeedbackBox = document.getElementById('webgazerFaceFeedbackBox');
+    const videoFeed = document.getElementById('webgazerVideoFeed');
     if (
-      document.getElementById('webgazerFaceFeedbackBox').style.display != 'none' &&
+      faceFeedbackBox &&
+      videoFeed &&
+      faceFeedbackBox.style.display != 'none' &&
       (new Date).getTime() > window.eyesExitedTimestamp + window.eyesReturnedDelay
     ) {   
-      document.getElementById('webgazerFaceFeedbackBox').style.display = 'none';
-      document.getElementById('webgazerVideoFeed').style.display = 'none';
+      faceFeedbackBox.style.display = 'none';
+      videoFeed.style.display = 'none';
     }
     
     // *calibration_square* updates
@@ -1624,7 +1641,9 @@ function trackingTrialRoutineBegin(snapshot) {
     tracking_resp.rt = undefined;
     _tracking_resp_allKeys = [];
     // Remove the click tracker used for calibration
-    window.webgazer.removeMouseEventListeners();
+    if (window.webgazer && typeof window.webgazer.removeMouseEventListeners === 'function') {
+      window.webgazer.removeMouseEventListeners();
+    }
     
     // Verify the coordinate plane was constructed
     if (!window.screenCoordinatePlane.initialized) {
@@ -1658,8 +1677,14 @@ function trackingTrialRoutineBegin(snapshot) {
                               }));
     
     //hide the video thumbnail 
-    document.getElementById('webgazerFaceFeedbackBox').style.display = 'none';
-    document.getElementById('webgazerVideoFeed').style.display = 'none';
+    const faceFeedbackBox = document.getElementById('webgazerFaceFeedbackBox');
+    const videoFeed = document.getElementById('webgazerVideoFeed');
+    if (faceFeedbackBox) {
+      faceFeedbackBox.style.display = 'none';
+    }
+    if (videoFeed) {
+      videoFeed.style.display = 'none';
+    }
     // keep track of which components have finished
     trackingTrialComponents = [];
     trackingTrialComponents.push(tracking_square);
@@ -1966,13 +1991,13 @@ function importConditions(currentLoop) {
     
     // Map the CSV column names to the variable names used in the code
     if (typeof currentTrial.Calibrate_X !== 'undefined') {
-      // Bug fix: properly set the Y coordinate rather than overwriting calibrationTxt
       window.calibration_x = currentTrial.Calibrate_X;
+      calibration_x = window.calibration_x;
     }
     
     if (typeof currentTrial.Calibrate_Y !== 'undefined') {
-      // Bug fix: properly set the Y coordinate rather than overwriting calibrationTxt
       window.calibration_y = currentTrial.Calibrate_Y;
+      calibration_y = window.calibration_y;
     }
     
     // For troubleshooting: log the values to make sure they're correctly set
@@ -2367,6 +2392,13 @@ async function quitPsychoJS(message, isCompleted) {
   }
   
   // Stop eye tracking and save final data
+  if (window.gazeExportTimer) {
+    clearInterval(window.gazeExportTimer);
+    window.gazeExportTimer = null;
+  }
+  if (typeof window.exportGazeData === 'function') {
+    window.exportGazeData();
+  }
   if (window.webgazer) {
     try {
       // Add final eye tracking metrics to experiment data
@@ -2559,32 +2591,7 @@ async function initializeWebGazer() {
                 psychoJS.experiment.currentScheduler.taskName || 'unknown' : 'unknown'
             };
             
-            // Store in global arrays for persistence and different use cases
-            
-            // Primary storage for all gaze data
-            if (!window.allGazeData) {
-              window.allGazeData = [];
-            }
-            window.allGazeData.push(dataPoint);
-            
-            // For moving average calculations (if used in the experiment)
-            if (window.xGazes && window.yGazes) {
-              window.xGazes.shift();
-              window.xGazes.push(data.x);
-              window.yGazes.shift();
-              window.yGazes.push(data.y);
-            }
-            
-            // For buffered exports to reduce memory pressure
-            if (window.gazeDataBuffer) {
-              window.gazeDataBuffer.push(dataPoint);
-              
-              // Auto-export if buffer gets too large
-              if (window.gazeDataBuffer.length > 100 && 
-                  typeof window.exportGazeData === 'function') {
-                window.exportGazeData();
-              }
-            }
+            recordGazeDataPoint(dataPoint);
             
             // Log to console periodically to avoid flooding
             if (window.allGazeData.length % 50 === 0) {
