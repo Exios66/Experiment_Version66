@@ -390,6 +390,80 @@ async function experimentInit() {
   window.lastExportTime = Date.now();
   window.eyesReturnedDelay = 1000; // 1 second delay before hiding webcam thumbnail
   window.eyesExitedTimestamp = Date.now();
+
+  // Crash protection: persist unsaved gaze buffer on unload/error (specific keys only)
+  if (!window.crashProtectionRegistered) {
+    window.crashProtectionRegistered = true;
+
+    const saveEmergencyGazeData = (reason, errorMessage) => {
+      if (!window.gazeDataBuffer || window.gazeDataBuffer.length === 0) {
+        return;
+      }
+      const storageKey = reason === 'page_unload' ? 'emergency_gaze_data'
+        : reason === 'crash' ? 'crash_gaze_data'
+        : 'promise_rejection_data';
+      try {
+        localStorage.setItem(storageKey, JSON.stringify({
+          timestamp: Date.now(),
+          sessionId: (expInfo.participant || '') + '_' + (expInfo.session || ''),
+          reason,
+          errorMessage: errorMessage || null,
+          gazePoints: window.gazeDataBuffer,
+        }));
+      } catch (e) {
+        console.error('Failed to save emergency gaze data:', e);
+      }
+      if (typeof window.exportGazeData === 'function') {
+        try {
+          window.exportGazeData();
+        } catch (e) {
+          console.error('Failed to flush gaze buffer during emergency save:', e);
+        }
+      }
+    };
+
+    window.addEventListener('beforeunload', () => saveEmergencyGazeData('page_unload'));
+    window.addEventListener('error', (event) => saveEmergencyGazeData('crash', event.message));
+    window.addEventListener('unhandledrejection', (event) => {
+      const message = event.reason ? (event.reason.message || String(event.reason)) : 'Unknown promise rejection';
+      saveEmergencyGazeData('promise_rejection', message);
+    });
+  }
+
+  // Recover emergency gaze data from a prior crash (explicit keys only; never scan webgazer keys)
+  const emergencyDataKeys = ['emergency_gaze_data', 'crash_gaze_data', 'promise_rejection_data'];
+  let recoveredDataCount = 0;
+  for (const key of emergencyDataKeys) {
+    const data = localStorage.getItem(key);
+    if (!data) {
+      continue;
+    }
+    try {
+      JSON.parse(data);
+      psychoJS.experiment.addData('recovered_data_type', key);
+      psychoJS.experiment.addData(`recovered_${key}`, data);
+      localStorage.removeItem(key);
+      recoveredDataCount++;
+      console.log(`Recovered emergency gaze data from localStorage key: ${key}`);
+    } catch (parseError) {
+      console.error(`Invalid emergency data in localStorage key ${key}:`, parseError);
+      localStorage.removeItem(key);
+    }
+  }
+  if (recoveredDataCount > 0) {
+    psychoJS.experiment.addData('recovered_data_count', recoveredDataCount);
+  }
+
+  // Periodic server save so gaze batches are not only in memory during long calibration
+  if (!window.autoSaveTimer) {
+    window.autoSaveTimer = setInterval(() => {
+      if (psychoJS.experiment) {
+        psychoJS.experiment.save().catch((e) => {
+          console.error('Auto-save failed:', e);
+        });
+      }
+    }, 10000);
+  }
   
   // Initialize storage for calibration data
   window.calibrationPoints = [];
@@ -2364,6 +2438,15 @@ async function quitPsychoJS(message, isCompleted) {
   // Check for and save orphaned data
   if (psychoJS.experiment.isEntryEmpty()) {
     psychoJS.experiment.nextEntry();
+  }
+
+  // Flush any remaining gaze buffer into experiment data before shutdown
+  if (typeof window.exportGazeData === 'function') {
+    try {
+      window.exportGazeData();
+    } catch (e) {
+      console.error('Failed to flush gaze buffer before quit:', e);
+    }
   }
   
   // Stop eye tracking and save final data
