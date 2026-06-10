@@ -33,6 +33,11 @@ for (const rel of targets) {
     failed = true;
   }
 
+  if (code.includes('emergency_gaze_data') && !code.includes("const emergencyDataKeys = ['emergency_gaze_data'")) {
+    console.error(`${rel}: emergency gaze recovery must use explicit localStorage keys`);
+    failed = true;
+  }
+
   if (code.includes('window.exportGazeData()') && !code.includes('window.exportGazeData = exportGazeData')) {
     console.error(`${rel}: window.exportGazeData is invoked but never assigned`);
     failed = true;
