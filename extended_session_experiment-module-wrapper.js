@@ -42,6 +42,9 @@ setTimeout(() => {
     import('./extended_session_experiment.js')
       .then(module => {
         console.log('Module loaded successfully!');
+        if (window.experimentLoadTimeout) {
+          clearTimeout(window.experimentLoadTimeout);
+        }
         window.experimentModuleLoaded = true;
         
         // Store a reference to the module
@@ -93,6 +96,11 @@ setTimeout(() => {
 
 // Function to load the non-module version as fallback
 function loadNonModuleVersion() {
+  if (window.experimentModuleLoaded) {
+    console.log('Main experiment module loaded before fallback was needed');
+    return;
+  }
+  window.experimentFallbackActive = true;
   const script = document.createElement('script');
   script.src = './extended_session_experiment-no-modules.js';
   
@@ -197,7 +205,7 @@ function patchCreateJS() {
 patchCreateJS();
 
 // Set up a timeout to ensure we don't hang
-setTimeout(function() {
+window.experimentLoadTimeout = setTimeout(function() {
   if (!window.experimentModuleLoaded) {
     console.warn('Experiment module not loaded after timeout, trying fallback...');
     if (typeof addDebugMessage === 'function') {

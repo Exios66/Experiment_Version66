@@ -43,6 +43,37 @@ for (const rel of targets) {
     console.error(`${rel}: startGazeLogging must not replace the WebGazer gaze listener`);
     failed = true;
   }
+
+  if (!code.includes('var calibration_x')) {
+    console.error(`${rel}: calibration_x must be a module-level var (ES module strict mode)`);
+    failed = true;
+  }
+
+  const quitMatch = code.match(/async function quitPsychoJS\([\s\S]*?\n\}/);
+  if (quitMatch && code.includes('window.exportGazeData = exportGazeData') &&
+      !quitMatch[0].includes('window.exportGazeData()')) {
+    console.error(`${rel}: quitPsychoJS must flush gazeDataBuffer via exportGazeData before shutdown`);
+    failed = true;
+  }
+}
+
+const wrapperPath = path.join(__dirname, '..', 'extended_session_experiment-module-wrapper.js');
+const wrapperCode = fs.readFileSync(wrapperPath, 'utf8');
+if (!wrapperCode.includes('experimentFallbackActive')) {
+  console.error('extended_session_experiment-module-wrapper.js: missing experimentFallbackActive fallback guard');
+  failed = true;
+}
+if (!wrapperCode.includes('clearTimeout(window.experimentLoadTimeout)')) {
+  console.error('extended_session_experiment-module-wrapper.js: must clear module load timeout after successful import');
+  failed = true;
+}
+
+for (const rel of ['start-server.js', 'src/server.js']) {
+  const serverCode = fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
+  if (!serverCode.includes('Forbidden')) {
+    console.error(`${rel}: missing path traversal protection`);
+    failed = true;
+  }
 }
 
 process.exit(failed ? 1 : 0);
