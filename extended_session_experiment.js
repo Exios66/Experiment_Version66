@@ -359,6 +359,8 @@ var calibrationClock;
 var calibration_square;
 var calibrationClick;
 var calibrationDot;
+var calibration_x;
+var calibration_y;
 var trackingTrialClock;
 var tracking_square;
 var trackingTxt;
@@ -373,6 +375,8 @@ async function experimentInit() {
   // Add these lines to ensure global variables are properly initialized
   window.calibration_x = 0;
   window.calibration_y = 0;
+  calibration_x = 0;
+  calibration_y = 0;
   
   // Initialize global array to store all gaze data points
   window.allGazeData = [];
@@ -1966,13 +1970,13 @@ function importConditions(currentLoop) {
     
     // Map the CSV column names to the variable names used in the code
     if (typeof currentTrial.Calibrate_X !== 'undefined') {
-      // Bug fix: properly set the Y coordinate rather than overwriting calibrationTxt
       window.calibration_x = currentTrial.Calibrate_X;
+      calibration_x = currentTrial.Calibrate_X;
     }
     
     if (typeof currentTrial.Calibrate_Y !== 'undefined') {
-      // Bug fix: properly set the Y coordinate rather than overwriting calibrationTxt
       window.calibration_y = currentTrial.Calibrate_Y;
+      calibration_y = currentTrial.Calibrate_Y;
     }
     
     // For troubleshooting: log the values to make sure they're correctly set
@@ -2364,6 +2368,15 @@ async function quitPsychoJS(message, isCompleted) {
   // Check for and save orphaned data
   if (psychoJS.experiment.isEntryEmpty()) {
     psychoJS.experiment.nextEntry();
+  }
+
+  // Flush buffered gaze batches before shutdown (Escape/early quit skips trackingTrialRoutineEnd)
+  if (window.gazeExportTimer) {
+    clearInterval(window.gazeExportTimer);
+    window.gazeExportTimer = null;
+  }
+  if (typeof window.exportGazeData === 'function') {
+    window.exportGazeData();
   }
   
   // Stop eye tracking and save final data
