@@ -112,6 +112,16 @@ function checkIfModuleFile(pathname) {
     return false;
 }
 
+function resolveSafePath(urlPathname) {
+    const root = path.resolve('.');
+    const relativePath = urlPathname === '/' ? 'index.html' : urlPathname.replace(/^\//, '');
+    const resolved = path.resolve(root, relativePath);
+    if (resolved !== root && !resolved.startsWith(root + path.sep)) {
+        return null;
+    }
+    return resolved;
+}
+
 // Create server
 const server = http.createServer((req, res) => {
     console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
@@ -119,19 +129,25 @@ const server = http.createServer((req, res) => {
     // Parse the URL
     const parsedUrl = url.parse(req.url);
     
-    // Extract the path from the URL
-    let pathname = `.${parsedUrl.pathname}`;
+    // Extract the path from the URL, blocking directory traversal
+    let pathname = resolveSafePath(parsedUrl.pathname);
+    if (!pathname) {
+        console.error(`Forbidden path requested: ${parsedUrl.pathname}`);
+        res.writeHead(403);
+        res.end('Forbidden');
+        return;
+    }
     
     // Default to index.html if the path is '/' or in SPA paths
-    if (pathname === './') {
+    if (parsedUrl.pathname === '/') {
         console.log('Serving index.html as default page');
-        pathname = './index.html';
+        pathname = path.resolve('.', 'index.html');
     } else if (knownTestPages.includes(parsedUrl.pathname)) {
         console.log(`Serving test page: ${parsedUrl.pathname}`);
         // pathname already has the correct value, no need to change
     } else if (spaPaths.includes(parsedUrl.pathname)) {
         console.log('Serving index.html for SPA route');
-        pathname = './index.html';
+        pathname = path.resolve('.', 'index.html');
     }
     
     // Handle missing source map files gracefully
@@ -216,6 +232,16 @@ const server = http.createServer((req, res) => {
         }
     }
     
+    const root = path.resolve('.');
+    const safePath = path.resolve(pathname);
+    if (safePath !== root && !safePath.startsWith(root + path.sep)) {
+        console.error(`Forbidden resolved path: ${pathname}`);
+        res.writeHead(403);
+        res.end('Forbidden');
+        return;
+    }
+    pathname = safePath;
+
     // Read the file
     fs.readFile(pathname, (err, data) => {
         if (err) {

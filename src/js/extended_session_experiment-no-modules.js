@@ -36,7 +36,9 @@ function reportError(message, error) {
 // Initialize experiment
 debug('Experiment script starting');
 
-try {
+if (window.experimentModuleLoaded) {
+  console.warn('Skipping no-modules fallback because main experiment module is already loaded');
+} else try {
   // Basic math helpers
   const { abs, sin, cos, PI: pi, sqrt } = Math;
   const round = function(num) {
