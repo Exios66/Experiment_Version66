@@ -359,6 +359,8 @@ var calibrationClock;
 var calibration_square;
 var calibrationClick;
 var calibrationDot;
+var calibration_x;
+var calibration_y;
 var trackingTrialClock;
 var tracking_square;
 var trackingTxt;
@@ -750,6 +752,11 @@ function initializeEyetrackingRoutineBegin(snapshot) {
     }, window.gazeExportInterval);
     
     // Start eye tracking with enhanced data collection
+    if (!window.webgazer) {
+      console.error('WebGazer unavailable; skipping gaze listener setup');
+      return Scheduler.Event.NEXT;
+    }
+
     window.webgazer
         // Called on each eye tracking update
         .setGazeListener(function(data, timestamp) {
@@ -905,6 +912,7 @@ function initializeEyetrackingRoutineEachFrame() {
     // update/draw components on each frame
     // Finish routine once everything is ready
     continueRoutine = 
+      !window.webgazer ||
       !window.webgazer.isReady() || 
       document.getElementById('webgazerFaceFeedbackBox') === null ||
       document.getElementById('webgazerVideoFeed') === null;
@@ -1413,12 +1421,15 @@ function calibrationRoutineEachFrame() {
       }
     }
     
+    const faceFeedbackBox = document.getElementById('webgazerFaceFeedbackBox');
+    const videoFeed = document.getElementById('webgazerVideoFeed');
     if (
-      document.getElementById('webgazerFaceFeedbackBox').style.display != 'none' &&
+      faceFeedbackBox && videoFeed &&
+      faceFeedbackBox.style.display != 'none' &&
       (new Date).getTime() > window.eyesExitedTimestamp + window.eyesReturnedDelay
     ) {   
-      document.getElementById('webgazerFaceFeedbackBox').style.display = 'none';
-      document.getElementById('webgazerVideoFeed').style.display = 'none';
+      faceFeedbackBox.style.display = 'none';
+      videoFeed.style.display = 'none';
     }
     
     // *calibration_square* updates
@@ -1658,8 +1669,10 @@ function trackingTrialRoutineBegin(snapshot) {
                               }));
     
     //hide the video thumbnail 
-    document.getElementById('webgazerFaceFeedbackBox').style.display = 'none';
-    document.getElementById('webgazerVideoFeed').style.display = 'none';
+    const faceFeedbackBox = document.getElementById('webgazerFaceFeedbackBox');
+    const videoFeed = document.getElementById('webgazerVideoFeed');
+    if (faceFeedbackBox) faceFeedbackBox.style.display = 'none';
+    if (videoFeed) videoFeed.style.display = 'none';
     // keep track of which components have finished
     trackingTrialComponents = [];
     trackingTrialComponents.push(tracking_square);
@@ -2367,6 +2380,14 @@ async function quitPsychoJS(message, isCompleted) {
   }
   
   // Stop eye tracking and save final data
+  if (typeof window.exportGazeData === 'function') {
+    try {
+      window.exportGazeData();
+    } catch (exportErr) {
+      console.error('Failed to flush gaze data buffer on quit:', exportErr);
+    }
+  }
+
   if (window.webgazer) {
     try {
       // Add final eye tracking metrics to experiment data
