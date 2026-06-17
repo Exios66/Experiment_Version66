@@ -5,6 +5,15 @@ const url = require('url');
 
 // Allow port to be configured through environment or command line
 const PORT = process.env.PORT || 8080;
+const SERVER_ROOT = path.resolve(__dirname);
+
+function resolveSafePath(relativePath) {
+    const resolved = path.resolve(SERVER_ROOT, relativePath.replace(/^\.\//, ''));
+    if (resolved !== SERVER_ROOT && !resolved.startsWith(SERVER_ROOT + path.sep)) {
+        return null;
+    }
+    return resolved;
+}
 
 // Known test pages that should be directly accessible
 const knownTestPages = [
@@ -121,17 +130,25 @@ const server = http.createServer((req, res) => {
     
     // Extract the path from the URL
     let pathname = `.${parsedUrl.pathname}`;
+    const safePath = resolveSafePath(pathname);
+    if (!safePath) {
+        console.error(`Path traversal blocked: ${parsedUrl.pathname}`);
+        res.writeHead(403, { 'Content-Type': 'text/plain' });
+        res.end('Forbidden');
+        return;
+    }
+    pathname = safePath;
     
     // Default to index.html if the path is '/' or in SPA paths
-    if (pathname === './') {
+    if (parsedUrl.pathname === '/' || parsedUrl.pathname === '') {
         console.log('Serving index.html as default page');
-        pathname = './index.html';
+        pathname = path.join(SERVER_ROOT, 'index.html');
     } else if (knownTestPages.includes(parsedUrl.pathname)) {
         console.log(`Serving test page: ${parsedUrl.pathname}`);
         // pathname already has the correct value, no need to change
     } else if (spaPaths.includes(parsedUrl.pathname)) {
         console.log('Serving index.html for SPA route');
-        pathname = './index.html';
+        pathname = path.join(SERVER_ROOT, 'index.html');
     }
     
     // Handle missing source map files gracefully
@@ -208,9 +225,10 @@ const server = http.createServer((req, res) => {
         ];
         
         for (const altPath of alternateVersions) {
-            if (fs.existsSync(altPath)) {
-                console.log(`Redirecting WebGazer request to alternate: ${altPath}`);
-                pathname = altPath;
+            const resolvedAlt = resolveSafePath(altPath);
+            if (resolvedAlt && fs.existsSync(resolvedAlt)) {
+                console.log(`Redirecting WebGazer request to alternate: ${resolvedAlt}`);
+                pathname = resolvedAlt;
                 break;
             }
         }
