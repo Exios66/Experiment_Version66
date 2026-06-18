@@ -33,6 +33,16 @@ for (const rel of targets) {
     failed = true;
   }
 
+  if (!code.includes('var calibration_x') && code.includes('calibration_x =')) {
+    console.error(`${rel}: calibration_x must be declared for ES module strict mode`);
+    failed = true;
+  }
+
+  if (code.includes('async function quitPsychoJS') && !code.match(/async function quitPsychoJS[\s\S]*?window\.exportGazeData\(\)/)) {
+    console.error(`${rel}: quitPsychoJS must flush gazeDataBuffer via exportGazeData`);
+    failed = true;
+  }
+
   if (code.includes('window.exportGazeData()') && !code.includes('window.exportGazeData = exportGazeData')) {
     console.error(`${rel}: window.exportGazeData is invoked but never assigned`);
     failed = true;
