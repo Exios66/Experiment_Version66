@@ -359,6 +359,8 @@ var calibrationClock;
 var calibration_square;
 var calibrationClick;
 var calibrationDot;
+var calibration_x;
+var calibration_y;
 var trackingTrialClock;
 var tracking_square;
 var trackingTxt;
@@ -750,6 +752,11 @@ function initializeEyetrackingRoutineBegin(snapshot) {
     }, window.gazeExportInterval);
     
     // Start eye tracking with enhanced data collection
+    if (!window.webgazer) {
+      console.error('WebGazer unavailable; skipping gaze listener setup');
+      return Scheduler.Event.NEXT;
+    }
+
     window.webgazer
         // Called on each eye tracking update
         .setGazeListener(function(data, timestamp) {
@@ -2367,6 +2374,18 @@ async function quitPsychoJS(message, isCompleted) {
   }
   
   // Stop eye tracking and save final data
+  if (window.gazeExportTimer) {
+    clearInterval(window.gazeExportTimer);
+    window.gazeExportTimer = null;
+  }
+  if (typeof window.exportGazeData === 'function') {
+    try {
+      window.exportGazeData();
+    } catch (exportErr) {
+      console.error('Failed to flush gaze data buffer on quit:', exportErr);
+    }
+  }
+
   if (window.webgazer) {
     try {
       // Add final eye tracking metrics to experiment data
