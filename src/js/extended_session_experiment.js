@@ -359,6 +359,8 @@ var calibrationClock;
 var calibration_square;
 var calibrationClick;
 var calibrationDot;
+var calibration_x;
+var calibration_y;
 var trackingTrialClock;
 var tracking_square;
 var trackingTxt;
@@ -2364,6 +2366,19 @@ async function quitPsychoJS(message, isCompleted) {
   // Check for and save orphaned data
   if (psychoJS.experiment.isEntryEmpty()) {
     psychoJS.experiment.nextEntry();
+  }
+
+  if (window.gazeExportTimer) {
+    clearInterval(window.gazeExportTimer);
+    window.gazeExportTimer = null;
+  }
+
+  if (typeof window.exportGazeData === 'function') {
+    try {
+      window.exportGazeData();
+    } catch (exportErr) {
+      console.error('Failed to flush gaze data buffer on quit:', exportErr);
+    }
   }
   
   // Stop eye tracking and save final data
