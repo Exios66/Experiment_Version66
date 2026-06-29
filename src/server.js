@@ -5,6 +5,31 @@ const url = require('url');
 
 // Allow port to be configured through environment or command line
 const PORT = process.env.PORT || 8080;
+const SERVER_ROOT = path.resolve(__dirname, '..');
+
+function resolveSafePath(relativePath) {
+    let decoded;
+    try {
+        decoded = decodeURIComponent(relativePath.replace(/^\.\//, ''));
+    } catch (err) {
+        return null;
+    }
+    const resolved = path.resolve(SERVER_ROOT, decoded);
+    if (resolved !== SERVER_ROOT && !resolved.startsWith(SERVER_ROOT + path.sep)) {
+        return null;
+    }
+    return resolved;
+}
+
+function hasTraversalSegments(urlPath) {
+    let decoded;
+    try {
+        decoded = decodeURIComponent(urlPath || '');
+    } catch (err) {
+        return true;
+    }
+    return decoded.split('/').some((seg) => seg === '..');
+}
 
 // Known test pages that should be directly accessible
 const knownTestPages = [
@@ -118,6 +143,13 @@ const server = http.createServer((req, res) => {
     
     // Parse the URL
     const parsedUrl = url.parse(req.url);
+
+    if (hasTraversalSegments(parsedUrl.pathname)) {
+        console.error(`Path traversal blocked: ${parsedUrl.pathname}`);
+        res.writeHead(403, { 'Content-Type': 'text/plain' });
+        res.end('Forbidden');
+        return;
+    }
     
     // Extract the path from the URL
     let pathname = '.' + parsedUrl.pathname;
@@ -256,6 +288,15 @@ const server = http.createServer((req, res) => {
             }
         }
     }
+
+    const safePath = resolveSafePath(pathname);
+    if (!safePath) {
+        console.error(`Path traversal blocked: ${parsedUrl.pathname}`);
+        res.writeHead(403, { 'Content-Type': 'text/plain' });
+        res.end('Forbidden');
+        return;
+    }
+    pathname = safePath;
     
     // Read the file
     fs.readFile(pathname, (err, data) => {
