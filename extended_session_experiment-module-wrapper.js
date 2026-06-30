@@ -5,6 +5,7 @@
 
 // Initialize global state needed by PsychoJS
 window.experimentModuleLoaded = false;
+window.experimentModuleLoading = false;
 window.experimentLoadAttempts = 0;
 window.maxLoadAttempts = 3;
 
@@ -32,6 +33,7 @@ setTimeout(() => {
   window.loadExperimentModule = function() {
     console.log('Loading experiment as ES6 module...');
     window.experimentLoadAttempts++;
+    window.experimentModuleLoading = true;
     
     // Add message to debug log if available
     if (typeof addDebugMessage === 'function') {
@@ -43,6 +45,7 @@ setTimeout(() => {
       .then(module => {
         console.log('Module loaded successfully!');
         window.experimentModuleLoaded = true;
+        window.experimentModuleLoading = false;
         
         // Store a reference to the module
         window.experimentModule = module;
@@ -68,6 +71,7 @@ setTimeout(() => {
       })
       .catch(error => {
         console.error('Failed to load experiment module:', error);
+        window.experimentModuleLoading = false;
         
         // Add message to debug log if available
         if (typeof addDebugMessage === 'function') {
@@ -93,6 +97,11 @@ setTimeout(() => {
 
 // Function to load the non-module version as fallback
 function loadNonModuleVersion() {
+  if (window.experimentModuleLoaded || window.experimentModuleLoading) {
+    console.warn('Experiment module already loaded or loading; skipping non-module fallback');
+    return;
+  }
+
   const script = document.createElement('script');
   script.src = './extended_session_experiment-no-modules.js';
   
@@ -198,7 +207,7 @@ patchCreateJS();
 
 // Set up a timeout to ensure we don't hang
 setTimeout(function() {
-  if (!window.experimentModuleLoaded) {
+  if (!window.experimentModuleLoaded && !window.experimentModuleLoading) {
     console.warn('Experiment module not loaded after timeout, trying fallback...');
     if (typeof addDebugMessage === 'function') {
       addDebugMessage('WARNING: Module load timeout, trying fallback');
